@@ -1,0 +1,36 @@
+{
+  "name": "ms-rewards-agent",
+  "version": "1.0.0",
+  "module": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "lint": "eslint src/**",
+    "format": "prettier --write src/**",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@types/node": "^22.0.0",
+    "playwright": "^1.58.0",
+    "playwright-core": "^1.58.0",
+    "winston": "^3.19.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/bun": "latest",
+    "eslint": "^9.0.0",
+    "globals": "^17.3.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.0.18"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
