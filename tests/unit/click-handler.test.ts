@@ -132,10 +132,10 @@ describe('ClickHandler', () => {
             count: vi.fn().mockResolvedValue(1),
           };
         }
-        
+
         // Default fallback for any other selector (description, completion, etc)
         // Must provide methods called by processCard (first, count, textContent)
-        return { 
+        return {
           count: vi.fn().mockResolvedValue(0),
           first: vi.fn().mockReturnValue({
              textContent: vi.fn().mockRejectedValue(new Error('Not found')), // simulate missing element for catch clause
