@@ -20,7 +20,7 @@ export type QARecord = {
   evidence?: string[];
 };
 
-import { Page } from 'playwright';
+import type { Page } from 'playwright';
 
 export interface TaskHandler {
   name: string;
