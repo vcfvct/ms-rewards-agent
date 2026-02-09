@@ -1,5 +1,5 @@
 import type { Page, Locator } from 'playwright';
-import type { TaskHandler, ActionResult, RunConfig } from '../types';
+import type { TaskHandler, ActionResult } from '../types';
 import { BrowserAdapter } from '../core/browser-adapter';
 import { randomDelay } from '../utils/humanizer';
 
@@ -13,12 +13,6 @@ const DEFAULT_CONFIG: QuizHandlerConfig = {
   maxActionsPerHour: 30,
 };
 
-interface QuizInfo {
-  type: 'poll' | 'quiz' | 'thisorthat' | 'unknown';
-  question: string;
-  choices: string[];
-  choiceLocators: Locator[];
-}
 
 export class QuizHandler implements TaskHandler {
   name = 'QuizHandler';
@@ -211,7 +205,7 @@ export class QuizHandler implements TaskHandler {
                 // If it was a generic "click to answer" (like poll), we are probably done or need to go back.
                 // If it was wrong answer, we might be able to click another.
                 // We continue loop.
-            } catch (e) {
+            } catch {
                 // Ignore click errors (element detached etc) and retry find
                 break;
             }

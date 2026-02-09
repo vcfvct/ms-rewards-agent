@@ -20,7 +20,9 @@ export type QARecord = {
   evidence?: string[];
 };
 
+import { Page } from 'playwright';
+
 export interface TaskHandler {
   name: string;
-  run(page: any): Promise<ActionResult>; // Using any for Page to avoid circular dependency for now, or I'll import Page from playwright types
+  run(page: Page): Promise<ActionResult>;
 }

@@ -84,7 +84,6 @@ export class Humanizer {
    * Types text with variable delays between keystrokes.
    */
   async typeHuman(page: Page, selector: string, text: string): Promise<void> {
-    const element = page.locator(selector).first();
     await this.clickHuman(page, selector); // Use human click to focus
 
     for (const char of text) {
