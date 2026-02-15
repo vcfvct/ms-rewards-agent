@@ -36,6 +36,39 @@ export class ClickHandler implements TaskHandler {
     };
   }
 
+  private normalizeExploreQuery(text: string): string {
+    const trimmed = text.trim();
+    if (!trimmed) return '';
+
+    // Examples we want to normalize:
+    // - "Search on Bing for best pizza" -> "best pizza"
+    // - "Search on Bing to learn about whales" -> "learn about whales"
+    // Handle case-insensitively and allow extra whitespace/punctuation.
+    const cleaned = trimmed
+      .replace(/^search\s+on\s+bing\s+(?:to|for)\s*[:\-–]?\s*/i, '')
+      .trim();
+
+    return cleaned || trimmed;
+  }
+
+  private getExploreQuery(activity: ActivityInfo): string {
+    const fromDescription = activity.description ? this.normalizeExploreQuery(activity.description) : '';
+    if (fromDescription) return fromDescription;
+    return this.normalizeExploreQuery(activity.title);
+  }
+
+  private getCardsInSectionByHeading(page: Page, headingRegex: RegExp): Locator {
+    const heading = page
+      .locator('h1,h2,h3,h4,[role="heading"]')
+      .filter({ hasText: headingRegex })
+      .first();
+
+    // Find the closest container that actually contains cards.
+    // The Rewards dashboard markup shifts often; avoid relying on specific class names.
+    const container = heading.locator('xpath=ancestor::*[self::section or self::div][.//mee-card][1]');
+    return container.locator('mee-card');
+  }
+
   async run(page: Page): Promise<ActionResult> {
     console.log(`[ClickHandler] Starting... (dryRun: ${this.config.dryRun})`);
     const result: ActionResult = {
@@ -117,6 +150,12 @@ export class ClickHandler implements TaskHandler {
         const isCompleted = (await card.locator('.mee-icon-SkypeCircleCheck, [aria-label*="complete" i], .c-glyph-check').count()) > 0;
         if (isCompleted) return null;
 
+        // In "More activities", only keep cards that award points
+        if (type === 'standard') {
+          const hasPoints = await card.locator('[aria-label="Points you will earn"]').count() > 0;
+          if (!hasPoints) return null;
+        }
+
         // Exclude quizzes for standard clicks (QuizHandler handles them)
         // But keep them for Explore if needed (though Explore usually aren't quizzes)
         if (type === 'standard') {
@@ -146,9 +185,14 @@ export class ClickHandler implements TaskHandler {
     };
 
     // 1. "More activities" Section
-    // Use xpath to find the header, then traverse to sibling cards
-    const moreActivities = page.locator('//h3[contains(text(), "More activities")]/ancestor::div[contains(@class, "mee-group-header")]/following-sibling::div//mee-card');
-    const moreCount = await moreActivities.count();
+    // Prefer robust heading-based detection; keep old XPath as a fallback.
+    let moreActivities = this.getCardsInSectionByHeading(page, /more\s+activities/i);
+    let moreCount = await moreActivities.count();
+    if (moreCount === 0) {
+      moreActivities = page.locator('//h3[contains(text(), "More activities")]/ancestor::div[contains(@class, "mee-group-header")]/following-sibling::div//mee-card');
+      moreCount = await moreActivities.count();
+    }
+    console.log(`[ClickHandler] Found ${moreCount} more-activities cards`);
 
     for (let i = 0; i < moreCount; i++) {
       const info = await processCard(moreActivities.nth(i), 'standard', activities.length);
@@ -188,9 +232,9 @@ export class ClickHandler implements TaskHandler {
     try {
       if (this.config.dryRun) {
         console.log(`[DRY-RUN] Would click: "${title}" (${activity.type})`);
-        const query = activity.description || activity.title;
-        if (activity.type === 'explore' && query) {
-            console.log(`[DRY-RUN] Would search: "${query}"`);
+        if (activity.type === 'explore') {
+          const query = this.getExploreQuery(activity);
+          if (query) console.log(`[DRY-RUN] Would search: "${query}"`);
         }
         return { success: true, title };
       }
@@ -198,21 +242,23 @@ export class ClickHandler implements TaskHandler {
       await locator.scrollIntoViewIfNeeded();
       await randomDelay(300, 800);
 
-      // Click
-      // Note: We use the locator directly now, simpler than selector string for these dynamic lists
-      await locator.click(); // Standard click, simple enough, or use browser.clickHuman if needed but we have locator
+      // Click (humanized)
+      await this.browser.humanizer.clickLocatorHuman(page, locator);
 
       // Wait for navigation
       await randomDelay(2000, 4000);
 
-      const query = activity.description || activity.title;
-      if (activity.type === 'explore' && query) {
-         console.log(`[ClickHandler] Explore activity: Searching for "${query}"`);
+      if (activity.type === 'explore') {
+        const query = this.getExploreQuery(activity);
+        if (!query) return { success: true, title };
+
+        console.log(`[ClickHandler] Explore activity: Searching for "${query}"`);
          // We might be on a new page or new tab.
          // If new tab, we need to find it.
          // Most rewards clicks open new tab.
-         const pages = page.context().pages();
-         const targetPage = pages[pages.length - 1]!; // The active one usually
+        const pages = page.context().pages();
+        const nonDashboardPages = pages.filter(p => p !== page);
+        const targetPage = nonDashboardPages.length > 0 ? nonDashboardPages[nonDashboardPages.length - 1]! : page;
 
          await targetPage.bringToFront();
 
@@ -230,12 +276,13 @@ export class ClickHandler implements TaskHandler {
          // OR update BrowserAdapter to accept a page.
 
          if (!targetPage.url().includes('bing.com')) {
-             await targetPage.goto('https://www.bing.com');
-             await randomDelay(1000, 2000);
+           await targetPage.goto('https://www.bing.com');
+           await randomDelay(1000, 2000);
          }
 
-         await this.browser.humanizer.typeHuman(targetPage, '#sb_form_q, [name="q"]', query);
-         await randomDelay(100, 300);
+         // Clear existing text and type human-like, then submit.
+         await this.browser.humanizer.clearAndTypeHuman(targetPage, '#sb_form_q, [name="q"]', query);
+         await randomDelay(120, 300);
          await targetPage.keyboard.press('Enter');
          await randomDelay(2000, 3000); // Wait for search results
       }

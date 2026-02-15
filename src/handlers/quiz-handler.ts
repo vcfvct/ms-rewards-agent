@@ -137,15 +137,19 @@ export class QuizHandler implements TaskHandler {
       for (let i = 0; i < count; i++) {
         const element = elements.nth(i);
         // Check if not completed
-        const isCompleted = await element.locator('[class*="completed"], .mee-icon-SkypeCircleCheck, .c-glyph-check').count() > 0;
-        if (!isCompleted) {
-           // We might need a unique ID to avoid duplicates.
-           // innerText is a decent proxy for now.
-           const text = await element.textContent() || '';
-           if (!processedIndices.has(text)) {
-             processedIndices.add(text);
-             quizzes.push(element);
-           }
+        const isCompleted = await element.locator('.mee-icon-SkypeCircleCheck, [aria-label*="complete" i], .c-glyph-check').count() > 0;
+        if (isCompleted) continue;
+
+        // Skip locked cards (e.g. "Sneak peek at tomorrow's set")
+        const isLocked = await element.locator('.points-locked, .mee-icon-Lock').count() > 0;
+        if (isLocked) continue;
+
+        // We might need a unique ID to avoid duplicates.
+        // innerText is a decent proxy for now.
+        const text = await element.textContent() || '';
+        if (!processedIndices.has(text)) {
+          processedIndices.add(text);
+          quizzes.push(element);
         }
       }
     }
