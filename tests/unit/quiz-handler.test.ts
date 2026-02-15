@@ -145,6 +145,44 @@ describe('QuizHandler', () => {
     });
   });
 
+  describe('locked card filtering', () => {
+    it('should skip locked cards in sneak-peek section', async () => {
+      // Build a quiz element that is NOT completed but IS locked
+      const lockedElement: any = {
+        count: vi.fn().mockResolvedValue(1),
+        nth: vi.fn().mockReturnThis(),
+        textContent: vi.fn().mockResolvedValue('Tomorrow Quiz'),
+        click: vi.fn().mockResolvedValue(undefined),
+        locator: vi.fn().mockImplementation((selector: string) => {
+          // Completion → not completed
+          if (selector.includes('SkypeCircleCheck') || selector.includes('complete')) {
+            return { count: vi.fn().mockResolvedValue(0) };
+          }
+          // Locked → YES
+          if (selector.includes('points-locked') || selector.includes('Lock')) {
+            return { count: vi.fn().mockResolvedValue(1) };
+          }
+          return { count: vi.fn().mockResolvedValue(0) };
+        }),
+      };
+
+      mockPage.locator = vi.fn().mockImplementation((selector: string) => {
+        // Return the locked element for quiz selectors
+        if (selector.includes('quiz')) {
+          return lockedElement;
+        }
+        return mockLocator;
+      });
+
+      const handler = new QuizHandler(mockBrowser, { dryRun: true });
+      const result = await handler.run(mockPage);
+
+      // Locked card should be skipped → no quizzes found
+      expect(result.status).toBe('skipped');
+      expect(lockedElement.click).not.toHaveBeenCalled();
+    });
+  });
+
   describe('result tracking', () => {
     it('should track quiz completion statistics', async () => {
       // When no quizzes are found, should have reason in meta

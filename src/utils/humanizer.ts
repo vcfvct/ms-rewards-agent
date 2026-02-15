@@ -1,4 +1,4 @@
-import type { Page } from 'playwright';
+import type { Page, Locator } from 'playwright';
 
 /**
  * Returns a promise that resolves after a random duration between min and max.
@@ -81,6 +81,34 @@ export class Humanizer {
   }
 
   /**
+   * Clicks a locator with human-like movement and delays.
+   * Useful when a stable selector string is not available.
+   */
+  async clickLocatorHuman(page: Page, locator: Locator): Promise<void> {
+    const element = locator.first();
+    const box = await element.boundingBox();
+    if (!box) throw new Error('Element not visible');
+
+    const targetX = box.x + box.width / 2 + (Math.random() - 0.5) * (box.width * 0.8);
+    const targetY = box.y + box.height / 2 + (Math.random() - 0.5) * (box.height * 0.8);
+
+    const startX = 0;
+    const startY = 0;
+
+    const path = generateMousePath(startX, startY, targetX, targetY);
+    for (const point of path) {
+      await page.mouse.move(point.x, point.y);
+      await new Promise(r => setTimeout(r, Math.random() * 5));
+    }
+
+    await randomDelay(100, 300);
+    await page.mouse.down();
+    await randomDelay(50, 150);
+    await page.mouse.up();
+    await randomDelay(500, 1000);
+  }
+
+  /**
    * Types text with variable delays between keystrokes.
    */
   async typeHuman(page: Page, selector: string, text: string): Promise<void> {
@@ -89,6 +117,22 @@ export class Humanizer {
     for (const char of text) {
       await page.keyboard.type(char);
       // Random delay between keystrokes (50ms - 150ms)
+      await randomDelay(50, 150);
+    }
+  }
+
+  /**
+   * Focuses the input, clears it, and then types text with variable delays.
+   */
+  async clearAndTypeHuman(page: Page, selector: string, text: string): Promise<void> {
+    await this.clickHuman(page, selector);
+    await page.keyboard.press('Control+A');
+    await randomDelay(30, 80);
+    await page.keyboard.press('Backspace');
+    await randomDelay(50, 120);
+
+    for (const char of text) {
+      await page.keyboard.type(char);
       await randomDelay(50, 150);
     }
   }

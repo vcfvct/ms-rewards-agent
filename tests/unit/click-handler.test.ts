@@ -33,6 +33,7 @@ describe('ClickHandler', () => {
       boundingBox: vi.fn().mockResolvedValue({ x: 100, y: 100, width: 50, height: 30 }),
       scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
       locator: vi.fn().mockReturnThis(),
+      filter: vi.fn().mockReturnThis(),
       click: vi.fn().mockResolvedValue(undefined),
     };
 
@@ -145,7 +146,21 @@ describe('ClickHandler', () => {
       });
 
       mockPage.locator = vi.fn().mockImplementation((selector: string) => {
-        // Match any selector that looks like it's finding cards (includes 'mee-card')
+        // Heading locator used by getCardsInSectionByHeading
+        if (selector.includes('h1,h2,h3,h4') || selector.includes('heading')) {
+          const headingChain: any = {
+            filter: vi.fn().mockReturnThis(),
+            first: vi.fn().mockReturnThis(),
+            locator: vi.fn().mockImplementation(() => ({
+              locator: vi.fn().mockReturnValue({
+                count: vi.fn().mockResolvedValue(1),
+                nth: vi.fn().mockReturnValue(mockActivityLocator),
+              }),
+            })),
+          };
+          return headingChain;
+        }
+        // XPath fallback for mee-card selectors
         if (selector.includes('mee-card')) {
           return {
             count: vi.fn().mockResolvedValue(1),
@@ -164,6 +179,56 @@ describe('ClickHandler', () => {
 
       // But should still report success in dry-run
       expect(result.status).toBe('ok');
+    });
+  });
+
+  describe('points filter', () => {
+    it('should skip More Activities cards without points-you-will-earn icon', async () => {
+      // Build a card locator that is visible, not completed, but has NO points icon
+      const noPointsCard: any = {
+        count: vi.fn().mockResolvedValue(1),
+        nth: vi.fn().mockReturnThis(),
+        isVisible: vi.fn().mockResolvedValue(true),
+        locator: vi.fn().mockImplementation((selector: string) => {
+          // Completion check → not completed
+          if (selector.includes('SkypeCircleCheck') || selector.includes('complete')) {
+            return { count: vi.fn().mockResolvedValue(0) };
+          }
+          // Points check → NO points icon
+          if (selector.includes('Points you will earn')) {
+            return { count: vi.fn().mockResolvedValue(0) };
+          }
+          return {
+            count: vi.fn().mockResolvedValue(0),
+            first: vi.fn().mockReturnValue({
+              textContent: vi.fn().mockResolvedValue('No-Points Card'),
+            }),
+          };
+        }),
+      };
+
+      mockPage.locator = vi.fn().mockImplementation((selector: string) => {
+        if (selector.includes('h1,h2,h3,h4')) {
+          return {
+            filter: vi.fn().mockReturnThis(),
+            first: vi.fn().mockReturnThis(),
+            locator: vi.fn().mockImplementation(() => ({
+              locator: vi.fn().mockReturnValue(noPointsCard),
+            })),
+          };
+        }
+        // Explore section returns 0 cards
+        if (selector.includes('explore')) {
+          return { count: vi.fn().mockResolvedValue(0) };
+        }
+        return mockLocator;
+      });
+
+      const handler = new ClickHandler(mockBrowser);
+      const result = await handler.run(mockPage);
+
+      // Card without points icon should be filtered out → skipped
+      expect(result.status).toBe('skipped');
     });
   });
 
