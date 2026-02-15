@@ -37,6 +37,7 @@ describe('Integration: Dry-Run Mode', () => {
       scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
       click: vi.fn().mockResolvedValue(undefined),
       locator: vi.fn().mockReturnThis(),
+      filter: vi.fn().mockReturnThis(),
     });
 
     const mockContext = {
