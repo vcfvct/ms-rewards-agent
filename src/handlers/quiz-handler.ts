@@ -224,14 +224,16 @@ export class QuizHandler implements TaskHandler {
 
   private async isQuizComplete(page: Page): Promise<boolean> {
       // Common completion indicators
-      const text = await page.content(); // Heavy, maybe check selectors instead
-      if (text.includes('Quiz complete') || text.includes('You earned')) return true;
+      try {
+          const quizCompleteText = page.getByText('Quiz complete', { exact: false });
+          if (await quizCompleteText.count() > 0 && await quizCompleteText.first().isVisible()) return true;
 
-      const completeHeader = page.locator('.c-heading', { hasText: 'complete' });
-      if (await completeHeader.count() > 0) return true;
-
-      // Points earned banner
-      if (await page.locator('.points-earned').count() > 0) return true;
+          // Points earned banner
+          const pointsEarned = page.locator('.points-earned');
+          if (await pointsEarned.count() > 0 && await pointsEarned.first().isVisible()) return true;
+      } catch (e) {
+          // Ignore errors if elements detach during check
+      }
 
       return false;
   }

@@ -190,7 +190,17 @@ export class ClickHandler implements TaskHandler {
       }
     };
 
-    // 1. "More activities" Section
+    // 1. "Daily set" Section
+    const dailySet = this.getCardsInSectionByHeading(page, /daily\s+set/i);
+    const dailyCount = await dailySet.count();
+    console.log(`[ClickHandler] Found ${dailyCount} daily-set cards`);
+
+    for (let i = 0; i < dailyCount; i++) {
+      const info = await processCard(dailySet.nth(i), 'standard', activities.length);
+      if (info) activities.push(info);
+    }
+
+    // 2. "More activities" Section
     // Prefer robust heading-based detection; keep old XPath as a fallback.
     let moreActivities = this.getCardsInSectionByHeading(page, /more\s+activities/i);
     let moreCount = await moreActivities.count();
@@ -205,7 +215,7 @@ export class ClickHandler implements TaskHandler {
       if (info) activities.push(info);
     }
 
-    // 2. "Explore on Bing" Section
+    // 3. "Explore on Bing" Section
     // We look for headers containing "Explore" (case-insensitive) to be more robust.
     // We get the ancestors div which acts as the container, then find all mee-cards within it.
     const exploreSection = page.locator('//h3[contains(translate(., "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "explore")]/ancestor::div[1]//mee-card');
