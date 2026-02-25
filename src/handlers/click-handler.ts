@@ -57,6 +57,7 @@ export class ClickHandler implements TaskHandler {
     // Special-case overrides to avoid triggering real purchases or bookings
     if (desc.includes('shopping list')) return 'iphone deals';
     if (desc.includes('flight')) return 'iad to sfo';
+    if (desc.includes('direct you to your next adventure')) return 'White House directions';
 
     const fromDescription = activity.description ? this.normalizeExploreQuery(activity.description) : '';
     if (fromDescription) return fromDescription;
