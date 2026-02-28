@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { existsSync, unlinkSync, rmdirSync, readFileSync } from 'fs';
-import { Logger, initLogger, getLogger } from '../../src/utils/logger';
+import { Logger, initLogger } from '../../src/utils/logger';
 
 describe('Logger', () => {
   const testLogPath = './test-data/logs/test.jsonl';
@@ -111,47 +111,6 @@ describe('Logger', () => {
     });
   });
 
-  describe('convenience methods', () => {
-    it('should log click actions', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      const logger = new Logger({ consoleEnabled: true });
-      logger.click('#button', 'success', 150);
-
-      expect(consoleSpy).toHaveBeenCalled();
-      const logCall = consoleSpy.mock.calls[0]![0];
-      expect(logCall).toContain('click');
-
-      consoleSpy.mockRestore();
-    });
-
-    it('should log search actions', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      const logger = new Logger({ consoleEnabled: true });
-      logger.search('test query', 'success', 2000);
-
-      expect(consoleSpy).toHaveBeenCalled();
-      const logCall = consoleSpy.mock.calls[0]![0];
-      expect(logCall).toContain('search');
-
-      consoleSpy.mockRestore();
-    });
-
-    it('should log quiz actions', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      const logger = new Logger({ consoleEnabled: true });
-      logger.quiz('What is 2+2?', 'success', { answer: '4' });
-
-      expect(consoleSpy).toHaveBeenCalled();
-      const logCall = consoleSpy.mock.calls[0]![0];
-      expect(logCall).toContain('quiz');
-
-      consoleSpy.mockRestore();
-    });
-  });
-
   describe('error logging', () => {
     it('should include error message and stack', () => {
       const logger = new Logger({
@@ -213,16 +172,8 @@ describe('Logger', () => {
   });
 
   describe('singleton', () => {
-    it('should provide default logger via getLogger', () => {
-      const logger1 = getLogger();
-      const logger2 = getLogger();
-
-      expect(logger1).toBe(logger2);
-      logger1.close();
-    });
-
     it('should allow reinitializing via initLogger', () => {
-      const logger1 = getLogger();
+      const logger1 = initLogger({ consoleEnabled: false });
       const logger2 = initLogger({ consoleEnabled: false });
 
       expect(logger1).not.toBe(logger2);

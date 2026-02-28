@@ -2,7 +2,6 @@ export type RunConfig = {
   userDataDir: string;
   dryRun: boolean;
   maxActionsPerHour: number;
-  randomSeed?: number;
 };
 
 export type ActionResult = {
@@ -11,13 +10,6 @@ export type ActionResult = {
   attempts: number;
   durationMs: number;
   meta?: Record<string, unknown>;
-};
-
-export type QARecord = {
-  questionHash: string;
-  answerIndex: number;
-  correct: boolean;
-  evidence?: string[];
 };
 
 import type { Page } from 'playwright';

@@ -3,19 +3,9 @@ import type { TaskHandler, ActionResult, RunConfig } from '../types';
 import { BrowserAdapter } from '../core/browser-adapter';
 import { randomDelay } from '../utils/humanizer';
 
-// Custom error for better retry logic
-export class SelectorNotFoundError extends Error {
-  constructor(selector: string) {
-    super(`Selector not found: ${selector}`);
-    this.name = 'SelectorNotFoundError';
-  }
-}
-
-
 interface ActivityInfo {
   index: number;
   title: string;
-  selector: string;
   isCompleted: boolean;
   locator: Locator;
   type: 'standard' | 'explore';
@@ -58,6 +48,7 @@ export class ClickHandler implements TaskHandler {
     if (desc.includes('shopping list')) return 'iphone deals';
     if (desc.includes('flight')) return 'iad to sfo';
     if (desc.includes('direct you to your next adventure')) return 'White House directions';
+    if (desc.includes('specific stock')) return 'msft stock price';
 
     const fromDescription = activity.description ? this.normalizeExploreQuery(activity.description) : '';
     if (fromDescription) return fromDescription;
@@ -182,7 +173,6 @@ export class ClickHandler implements TaskHandler {
           title: title.trim(),
           isCompleted,
           locator: link, // Click the link
-          selector: `placeholder`, // We use locator directly mainly
           type,
           description: description?.trim(),
         };
@@ -224,9 +214,9 @@ export class ClickHandler implements TaskHandler {
     console.log(`[ClickHandler] Found ${exploreCount} explore cards`);
 
     for (let i = 0; i < exploreCount; i++) {
-        // Find if it has meme-paragraph to search
-        const info = await processCard(exploreSection.nth(i), 'explore', activities.length);
-        if (info) activities.push(info);
+      // Find if it has meme-paragraph to search
+      const info = await processCard(exploreSection.nth(i), 'explore', activities.length);
+      if (info) activities.push(info);
     }
 
     // If sections aren't clearly labeled or using new UI, fallback to finding cards with "mee-paragraph" for explore?
@@ -270,38 +260,38 @@ export class ClickHandler implements TaskHandler {
         if (!query) return { success: true, title };
 
         console.log(`[ClickHandler] Explore activity: Searching for "${query}"`);
-         // We might be on a new page or new tab.
-         // If new tab, we need to find it.
-         // Most rewards clicks open new tab.
+        // We might be on a new page or new tab.
+        // If new tab, we need to find it.
+        // Most rewards clicks open new tab.
         const pages = page.context().pages();
         const nonDashboardPages = pages.filter(p => p !== page);
         const targetPage = nonDashboardPages.length > 0 ? nonDashboardPages[nonDashboardPages.length - 1]! : page;
 
-         await targetPage.bringToFront();
+        await targetPage.bringToFront();
 
-         // Assuming we are on Bing, or need to go to Bing.
-         // Usually these links go to a search page already.
-         // But user requirement: "click and search the text".
-         // Strategy: Use the browser adapter's search method on the target page.
+        // Assuming we are on Bing, or need to go to Bing.
+        // Usually these links go to a search page already.
+        // But user requirement: "click and search the text".
+        // Strategy: Use the browser adapter's search method on the target page.
 
-         // We must use the browser adapter to leverage human-like typing
-         // BUT browser adapter methods like .search() usually use this.getPage() which is the MAIN dashboard page.
-         // We need to execute search on the TARGET page (the new tab).
+        // We must use the browser adapter to leverage human-like typing
+        // BUT browser adapter methods like .search() usually use this.getPage() which is the MAIN dashboard page.
+        // We need to execute search on the TARGET page (the new tab).
 
-         // Simplification: Just run the search on the active tab (targetPage).
-         // Since browser.search() relies on `this.getPage()`, we'll implement the search logic locally here
-         // OR update BrowserAdapter to accept a page.
+        // Simplification: Just run the search on the active tab (targetPage).
+        // Since browser.search() relies on `this.getPage()`, we'll implement the search logic locally here
+        // OR update BrowserAdapter to accept a page.
 
-         if (!targetPage.url().includes('bing.com')) {
-           await targetPage.goto('https://www.bing.com');
-           await randomDelay(1000, 2000);
-         }
+        if (!targetPage.url().includes('bing.com')) {
+          await targetPage.goto('https://www.bing.com');
+          await randomDelay(1000, 2000);
+        }
 
-         // Clear existing text and type human-like, then submit.
-         await this.browser.humanizer.clearAndTypeHuman(targetPage, '#sb_form_q, [name="q"]', query);
-         await randomDelay(120, 300);
-         await targetPage.keyboard.press('Enter');
-         await randomDelay(2000, 3000); // Wait for search results
+        // Clear existing text and type human-like, then submit.
+        await this.browser.humanizer.clearAndTypeHuman(targetPage, '#sb_form_q, [name="q"]', query);
+        await randomDelay(120, 300);
+        await targetPage.keyboard.press('Enter');
+        await randomDelay(2000, 3000); // Wait for search results
       }
 
       // Cleanup tabs
@@ -314,9 +304,9 @@ export class ClickHandler implements TaskHandler {
 
       // If we used the main page for navigation (no new tab opened), we must go back to specific dashboard
       if (page.url().includes('bing.com/search')) {
-          console.log('[ClickHandler] Returning to dashboard...');
-          await this.browser.goto('https://rewards.bing.com/');
-          await randomDelay(1000, 2000);
+        console.log('[ClickHandler] Returning to dashboard...');
+        await this.browser.goto('https://rewards.bing.com/');
+        await randomDelay(1000, 2000);
       }
 
       return { success: true, title };

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { existsSync, unlinkSync, mkdirSync, rmdirSync, readFileSync } from 'fs';
-import { Storage, QACache, MetricsStore } from '../../src/utils/storage';
+import { Storage, MetricsStore } from '../../src/utils/storage';
 
 describe('Storage', () => {
   const testFilePath = './test-data/test-storage.json';
@@ -66,98 +66,6 @@ describe('Storage', () => {
     unlinkSync(nestedPath);
     rmdirSync('./test-data/nested/deep');
     rmdirSync('./test-data/nested');
-  });
-});
-
-describe('QACache', () => {
-  const testCachePath = './test-data/test-qa-cache.json';
-
-  beforeEach(() => {
-    if (existsSync(testCachePath)) {
-      unlinkSync(testCachePath);
-    }
-  });
-
-  afterEach(() => {
-    if (existsSync(testCachePath)) {
-      unlinkSync(testCachePath);
-    }
-    try {
-      rmdirSync('./test-data');
-    } catch {
-      // Ignore
-    }
-  });
-
-  it('should hash questions consistently', () => {
-    const cache = new QACache(testCachePath);
-    const hash1 = cache.hashQuestion('What is the capital of France?');
-    const hash2 = cache.hashQuestion('What is the capital of France?');
-    expect(hash1).toBe(hash2);
-  });
-
-  it('should normalize questions for hashing', () => {
-    const cache = new QACache(testCachePath);
-    const hash1 = cache.hashQuestion('What is the CAPITAL of France?');
-    const hash2 = cache.hashQuestion('what is the capital of france?');
-    expect(hash1).toBe(hash2);
-  });
-
-  it('should store and lookup QA records', () => {
-    const cache = new QACache(testCachePath);
-    cache.store('What color is the sky?', 2, true, ['evidence1']);
-
-    const record = cache.lookup('What color is the sky?');
-    expect(record).not.toBeNull();
-    expect(record!.answerIndex).toBe(2);
-    expect(record!.correct).toBe(true);
-  });
-
-  it('should return null for unknown questions', () => {
-    const cache = new QACache(testCachePath);
-    const record = cache.lookup('Unknown question');
-    expect(record).toBeNull();
-  });
-
-  it('should not overwrite correct answers with incorrect ones', () => {
-    const cache = new QACache(testCachePath);
-    cache.store('Test question', 1, true);
-    cache.store('Test question', 2, false);
-
-    const record = cache.lookup('Test question');
-    expect(record!.answerIndex).toBe(1); // Should keep the correct one
-    expect(record!.correct).toBe(true);
-  });
-
-  it('should calculate confidence correctly', () => {
-    const cache = new QACache(testCachePath);
-
-    expect(cache.getConfidence('Unknown')).toBe(0);
-
-    cache.store('Correct question', 0, true);
-    expect(cache.getConfidence('Correct question')).toBe(1.0);
-
-    // Store incorrect in new cache
-    const cache2 = new QACache('./test-data/test-qa-cache2.json');
-    cache2.store('Incorrect question', 0, false);
-    expect(cache2.getConfidence('Incorrect question')).toBe(0.3);
-
-    // Cleanup
-    if (existsSync('./test-data/test-qa-cache2.json')) {
-      unlinkSync('./test-data/test-qa-cache2.json');
-    }
-  });
-
-  it('should provide statistics', () => {
-    const cache = new QACache(testCachePath);
-    cache.store('Q1', 0, true);
-    cache.store('Q2', 1, true);
-    cache.store('Q3', 2, false);
-
-    const stats = cache.getStats();
-    expect(stats.total).toBe(3);
-    expect(stats.correct).toBe(2);
-    expect(stats.incorrect).toBe(1);
   });
 });
 

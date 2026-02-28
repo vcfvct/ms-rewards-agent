@@ -73,44 +73,4 @@ export class BrowserAdapter {
     await page.goto(url, { waitUntil: 'domcontentloaded' });
   }
 
-  // Delegated Humanizer methods
-  async clickHuman(selector: string) {
-    const page = this.getPage();
-    console.log(`[Humanizer] Clicking ${selector}`);
-    await this.humanizer.clickHuman(page, selector);
-  }
-
-  async typeHuman(selector: string, text: string) {
-    const page = this.getPage();
-    console.log(`[Humanizer] Typing "${text}" into ${selector}`);
-    await this.humanizer.typeHuman(page, selector, text);
-  }
-
-  async search(query: string) {
-    const page = this.getPage();
-    console.log(`[Browser] Searching for: "${query}"`);
-
-    // Go to Bing if not already there
-    if (!page.url().includes('bing.com')) {
-      await page.goto('https://www.bing.com');
-    }
-
-    // Wait for search box
-    const searchBox = page.locator('input[name="q"], #sb_form_q');
-    await searchBox.waitFor({ state: 'visible' });
-
-    // Focus and clear
-    await searchBox.click();
-    await page.keyboard.press('Control+A');
-    await page.keyboard.press('Backspace');
-
-    // Type query human-like
-    await this.humanizer.typeHuman(page, 'input[name="q"], #sb_form_q', query);
-
-    // Press Enter and wait for results
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-      page.keyboard.press('Enter'),
-    ]);
-  }
 }
