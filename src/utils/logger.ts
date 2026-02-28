@@ -148,19 +148,6 @@ export class Logger {
     this.log('error', action, errorDetails);
   }
 
-  // Convenience methods for common actions
-  click(selector: string, result: 'success' | 'fail', durationMs?: number): void {
-    this.info('click', { selector, result, durationMs });
-  }
-
-  search(query: string, result: 'success' | 'fail', durationMs?: number): void {
-    this.info('search', { query, result, durationMs });
-  }
-
-  quiz(question: string, result: 'success' | 'fail', meta?: Record<string, unknown>): void {
-    this.info('quiz', { query: question, result, meta });
-  }
-
   /**
    * Logs an ActionResult from a handler.
    */
@@ -187,17 +174,6 @@ export class Logger {
 
 // Default singleton instance
 let defaultLogger: Logger | null = null;
-
-export function getLogger(): Logger {
-  if (!defaultLogger) {
-    defaultLogger = new Logger({
-      filePath: './data/logs/agent.jsonl',
-      consoleEnabled: true,
-      minLevel: 'info',
-    });
-  }
-  return defaultLogger;
-}
 
 export function initLogger(options?: ConstructorParameters<typeof Logger>[0]): Logger {
   if (defaultLogger) {

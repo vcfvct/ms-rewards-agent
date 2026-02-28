@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ClickHandler, SelectorNotFoundError } from '../../src/handlers/click-handler';
+import { ClickHandler } from '../../src/handlers/click-handler';
 import type { BrowserAdapter } from '../../src/core/browser-adapter';
 
 // Mock the humanizer module to avoid real delays in tests
@@ -53,8 +53,6 @@ describe('ClickHandler', () => {
     mockBrowser = {
       goto: vi.fn().mockResolvedValue(undefined),
       getPage: vi.fn().mockReturnValue(mockPage),
-      clickHuman: vi.fn().mockResolvedValue(undefined),
-      typeHuman: vi.fn().mockResolvedValue(undefined),
     } as unknown as BrowserAdapter;
   });
 
@@ -245,11 +243,3 @@ describe('ClickHandler', () => {
   });
 });
 
-describe('SelectorNotFoundError', () => {
-  it('should create error with selector in message', () => {
-    const error = new SelectorNotFoundError('#missing-element');
-
-    expect(error.name).toBe('SelectorNotFoundError');
-    expect(error.message).toContain('#missing-element');
-  });
-});

@@ -68,8 +68,6 @@ describe('Integration: Dry-Run Mode', () => {
       close: vi.fn().mockResolvedValue(undefined),
       goto: vi.fn().mockResolvedValue(undefined),
       getPage: vi.fn().mockReturnValue(mockPage),
-      clickHuman: vi.fn().mockResolvedValue(undefined),
-      typeHuman: vi.fn().mockResolvedValue(undefined),
     } as unknown as BrowserAdapter;
   });
 
@@ -93,9 +91,8 @@ describe('Integration: Dry-Run Mode', () => {
 
       await handler.run(mockPage);
 
-      // Verify no actual clicking happened via the browser adapter
-      // (The handler should short-circuit before calling clickHuman)
-      expect(mockBrowser.clickHuman).not.toHaveBeenCalled();
+      // Verify no actual clicking happened on the page
+      expect(mockPage.click).not.toHaveBeenCalled();
     });
 
     it('should navigate to rewards page', async () => {

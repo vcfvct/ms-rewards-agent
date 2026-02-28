@@ -1,7 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs';
 import { dirname } from 'path';
-import type { QARecord } from '../types';
-
 /**
  * Simple JSON-backed storage for QA cache and logs.
  * Uses atomic writes to prevent data corruption.
@@ -58,98 +56,6 @@ export class Storage<T> {
     } catch (error) {
       console.error(`[Storage] Failed to save ${this.filePath}:`, error);
     }
-  }
-}
-
-/**
- * QA Cache for storing question-answer pairs and their correctness.
- * Uses question hash as key for fast lookup.
- */
-export class QACache {
-  private storage: Storage<Record<string, QARecord>>;
-
-  constructor(filePath: string = './data/qa-cache.json') {
-    this.storage = new Storage(filePath, {});
-  }
-
-  /**
-   * Creates a hash from a question string for consistent lookup.
-   */
-  hashQuestion(question: string): string {
-    // Simple hash: normalize and create a basic hash
-    const normalized = question
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // Simple string hash (djb2 algorithm)
-    let hash = 5381;
-    for (let i = 0; i < normalized.length; i++) {
-      hash = ((hash << 5) + hash) + normalized.charCodeAt(i);
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return Math.abs(hash).toString(16);
-  }
-
-  /**
-   * Looks up a cached answer for a question.
-   */
-  lookup(question: string): QARecord | null {
-    const hash = this.hashQuestion(question);
-    const cache = this.storage.get();
-    return cache[hash] || null;
-  }
-
-  /**
-   * Stores a QA record in the cache.
-   */
-  store(question: string, answerIndex: number, correct: boolean, evidence?: string[]): void {
-    const hash = this.hashQuestion(question);
-    const record: QARecord = {
-      questionHash: hash,
-      answerIndex,
-      correct,
-      evidence,
-    };
-
-    this.storage.update(cache => {
-      // If we already have a correct answer, don't overwrite with incorrect
-      const existing = cache[hash];
-      if (existing?.correct && !correct) {
-        return cache;
-      }
-      return { ...cache, [hash]: record };
-    });
-  }
-
-  /**
-   * Gets the confidence score for a cached answer (based on correctness history).
-   */
-  getConfidence(question: string): number {
-    const record = this.lookup(question);
-    if (!record) return 0;
-    return record.correct ? 1.0 : 0.3;
-  }
-
-  /**
-   * Exports the cache for backup/analysis.
-   */
-  export(): Record<string, QARecord> {
-    return this.storage.get();
-  }
-
-  /**
-   * Gets cache statistics.
-   */
-  getStats(): { total: number; correct: number; incorrect: number } {
-    const cache = this.storage.get();
-    const records = Object.values(cache);
-    return {
-      total: records.length,
-      correct: records.filter(r => r.correct).length,
-      incorrect: records.filter(r => !r.correct).length,
-    };
   }
 }
 
