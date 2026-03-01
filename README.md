@@ -42,11 +42,29 @@ pnpm run start
 | Option | Description | Default |
 |--------|-------------|---------|
 | `-d, --dry-run` | Log actions without executing | `false` |
-| `-u, --user-data-dir` | Browser profile directory | `./user_data` |
+| `-u, --user-data-dir` | Browser profile directory | `~/.ms-rewards-agent/edge-profile` |
+| `-p, --profile <name>` | Use a specific Edge profile (by display name, email, or account name) | - |
+| `--list-profiles` | List available Edge profiles and exit | - |
 | `-m, --max-actions` | Maximum actions per hour | `30` |
 | `--skip-clicks` | Skip click activities | `false` |
 | `--skip-quizzes` | Skip quiz activities | `false` |
 | `--metrics` | Show metrics summary and exit | - |
+
+### Profile Selection
+
+By default, the agent uses an isolated browser profile at `~/.ms-rewards-agent/edge-profile`. To use your existing Edge profile (with cookies, saved logins, etc.):
+
+1. First, close Microsoft Edge completely (Edge locks the profile directory while running)
+2. List available profiles:
+   ```bash
+   pnpm run start -- --list-profiles
+   ```
+3. Run with a specific profile:
+   ```bash
+   pnpm run start -- --profile "vcfvct@hotmail.com" --dry-run
+   ```
+
+The `--profile` flag matches against display name, email, account name, or folder name (case-insensitive).
 
 ## Architecture
 
@@ -59,9 +77,10 @@ src/
 │   ├── click-handler.ts      # Daily activities + Explore searches
 │   └── quiz-handler.ts       # Quiz detection & answering
 ├── utils/
-│   ├── humanizer.ts          # Mouse paths, delays, typing
-│   ├── storage.ts            # QA cache & metrics persistence
-│   └── logger.ts             # Structured JSON logging
+│   ├── edge-profiles.ts         # Edge profile scanning & selection
+│   ├── humanizer.ts             # Mouse paths, delays, typing
+│   ├── storage.ts               # Metrics persistence
+│   └── logger.ts                # Structured JSON logging
 └── types/
     └── index.ts              # Shared TypeScript interfaces
 ```
@@ -168,7 +187,7 @@ pnpm exec vitest run tests/unit/click-handler.test.ts
 pnpm exec vitest run --coverage
 ```
 
-**Test Coverage**: 104 tests across 9 test files covering handlers, utilities, and integration scenarios.
+**Test Coverage**: 79 tests across 8 test files covering handlers, utilities, and integration scenarios.
 
 ## Configuration Files
 

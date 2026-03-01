@@ -12,7 +12,7 @@ export class BrowserAdapter {
     this.humanizer = new Humanizer();
   }
 
-  async init(userDataDir: string, headless: boolean = false) {
+  async init(userDataDir: string, headless: boolean = false, profileDir?: string) {
     const absoluteUserDataDir = path.resolve(userDataDir);
     console.log(`Launching browser with user data: ${absoluteUserDataDir}`);
 
@@ -28,16 +28,22 @@ export class BrowserAdapter {
              executablePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
         }
 
+        const args = [
+            '--disable-blink-features=AutomationControlled',
+            '--no-sandbox',
+            '--disable-infobars',
+        ];
+
+        if (profileDir) {
+            args.push(`--profile-directory=${profileDir}`);
+        }
+
         this.context = await chromium.launchPersistentContext(absoluteUserDataDir, {
             headless,
             executablePath,
             viewport: { width: 1280, height: 720 },
-            channel: executablePath ? undefined : 'msedge', // Try to use installed Edge if path not manual
-            args: [
-                '--disable-blink-features=AutomationControlled',
-                '--no-sandbox',
-                '--disable-infobars',
-            ],
+            channel: executablePath ? undefined : 'msedge',
+            args,
         });
 
         const pages = this.context.pages();
