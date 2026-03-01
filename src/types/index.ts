@@ -1,5 +1,6 @@
 export type RunConfig = {
   userDataDir: string;
+  profileDir?: string;
   dryRun: boolean;
   maxActionsPerHour: number;
 };

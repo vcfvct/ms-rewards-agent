@@ -6,11 +6,14 @@ import { initLogger } from './utils/logger';
 import type { RunConfig, ActionResult } from './types';
 import { homedir } from 'os';
 import { join } from 'path';
+import { printProfiles, resolveProfileByName } from './utils/edge-profiles';
 
 interface ExtendedConfig extends RunConfig {
   skipClicks: boolean;
   skipQuizzes: boolean;
   showMetrics: boolean;
+  listProfiles: boolean;
+  profileName?: string;
 }
 
 /**
@@ -45,6 +48,8 @@ function parseArgs(): ExtendedConfig {
     skipClicks: false,
     skipQuizzes: false,
     showMetrics: false,
+    listProfiles: false,
+    profileName: undefined,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -62,6 +67,10 @@ function parseArgs(): ExtendedConfig {
       config.skipQuizzes = true;
     } else if (arg === '--metrics') {
       config.showMetrics = true;
+    } else if (arg === '--list-profiles') {
+      config.listProfiles = true;
+    } else if (arg === '--profile' || arg === '-p') {
+      config.profileName = args[++i];
     } else if (arg === '--help' || arg === '-h') {
       console.log(`
 MS Rewards Agent - Automated Microsoft Rewards collector
@@ -71,8 +80,9 @@ Usage: pnpm run start [options]
 Options:
   -d, --dry-run          Log actions without executing (safe mode)
   -u, --user-data-dir    Path to browser user data directory (default: Edge profile)
+  -p, --profile <name>   Use a specific Edge profile (by display name, email, or account name)
+  --list-profiles        List available Edge profiles and exit
   -m, --max-actions      Maximum actions per hour (default: 30)
-  -s, --search-count     Number of Bing searches to perform (default: 3)
   --skip-clicks          Skip click activities
   --skip-quizzes         Skip quiz activities
   --metrics              Show metrics summary and exit
@@ -81,6 +91,8 @@ Options:
 Example:
   pnpm run start -- --dry-run
   pnpm run start -- -u ./my_profile -m 20
+  pnpm run start -- --list-profiles
+  pnpm run start -- --profile "Profile 2" --dry-run
   pnpm run start -- --metrics
 `);
       process.exit(0);
@@ -97,6 +109,25 @@ const main = async () => {
     filePath: './.rewards.log',
     minLevel: config.dryRun ? 'debug' : 'info',
   });
+
+  // List Edge profiles and exit
+  if (config.listProfiles) {
+    printProfiles();
+    process.exit(0);
+  }
+
+  // Resolve --profile to an actual Edge profile directory
+  if (config.profileName) {
+    const resolved = resolveProfileByName(config.profileName);
+    if (!resolved) {
+      console.error(`Error: No Edge profile found matching "${config.profileName}".`);
+      console.error('Run with --list-profiles to see available profiles.');
+      process.exit(1);
+    }
+    config.userDataDir = resolved.userDataDir;
+    config.profileDir = resolved.profileDir;
+    console.log(`Using Edge profile: "${config.profileName}" (folder: ${resolved.profileDir})`);
+  }
 
   // Show metrics only if requested
   if (config.showMetrics) {
@@ -116,6 +147,9 @@ const main = async () => {
   console.log('MS Rewards Agent Starting...');
   console.log(`  Mode: ${config.dryRun ? 'DRY-RUN (no real actions)' : 'LIVE'}`);
   console.log(`  User Data: ${config.userDataDir}`);
+  if (config.profileDir) {
+    console.log(`  Edge Profile: ${config.profileName} (${config.profileDir})`);
+  }
   console.log(`  Max Actions/Hour: ${config.maxActionsPerHour}`);
   console.log(`  Skip Clicks: ${config.skipClicks}`);
   console.log(`  Skip Quizzes: ${config.skipQuizzes}`);
@@ -132,7 +166,7 @@ const main = async () => {
 
   try {
     // Initialize browser with the user profile
-    await browser.init(config.userDataDir, false);
+    await browser.init(config.userDataDir, false, config.profileDir);
     const page = browser.getPage();
 
     // Run Click Handler
