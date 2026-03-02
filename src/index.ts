@@ -1,12 +1,17 @@
-import { BrowserAdapter } from './core/browser-adapter';
-import { ClickHandler } from './handlers/click-handler';
-import { QuizHandler } from './handlers/quiz-handler';
-import { MetricsStore } from './utils/storage';
-import { initLogger } from './utils/logger';
-import type { RunConfig, ActionResult } from './types';
-import { homedir } from 'os';
-import { join } from 'path';
-import { printProfiles, resolveProfileByName } from './utils/edge-profiles';
+import { BrowserAdapter } from "./core/browser-adapter";
+import { ClickHandler } from "./handlers/click-handler";
+import { QuizHandler } from "./handlers/quiz-handler";
+import { MetricsStore } from "./utils/storage";
+import { initLogger } from "./utils/logger";
+import type { RunConfig, ActionResult } from "./types";
+import { homedir } from "os";
+import { join } from "path";
+import {
+  printProfiles,
+  resolveProfileByName,
+  copyProfileToIsolated,
+  isEdgeRunning,
+} from "./utils/edge-profiles";
 
 interface ExtendedConfig extends RunConfig {
   skipClicks: boolean;
@@ -23,15 +28,21 @@ interface ExtendedConfig extends RunConfig {
 function getDefaultEdgeUserDataDir(): string {
   const home = homedir();
 
-  if (process.platform === 'win32') {
+  if (process.platform === "win32") {
     // Windows: Use a dedicated folder in user's home to avoid Edge conflicts
-    return join(home, '.ms-rewards-agent', 'edge-profile');
-  } else if (process.platform === 'darwin') {
+    return join(home, ".ms-rewards-agent", "edge-profile");
+  } else if (process.platform === "darwin") {
     // macOS: ~/Library/Application Support/ms-rewards-agent
-    return join(home, 'Library', 'Application Support', 'ms-rewards-agent', 'edge-profile');
+    return join(
+      home,
+      "Library",
+      "Application Support",
+      "ms-rewards-agent",
+      "edge-profile",
+    );
   } else {
     // Linux: ~/.ms-rewards-agent/edge-profile
-    return join(home, '.ms-rewards-agent', 'edge-profile');
+    return join(home, ".ms-rewards-agent", "edge-profile");
   }
 }
 
@@ -55,23 +66,24 @@ function parseArgs(): ExtendedConfig {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
 
-    if (arg === '--dry-run' || arg === '-d') {
+    if (arg === "--dry-run" || arg === "-d") {
       config.dryRun = true;
-    } else if (arg === '--user-data-dir' || arg === '-u') {
+    } else if (arg === "--user-data-dir" || arg === "-u") {
       config.userDataDir = args[++i] || config.userDataDir;
-    } else if (arg === '--max-actions' || arg === '-m') {
-      config.maxActionsPerHour = parseInt(args[++i] ?? '', 10) || config.maxActionsPerHour;
-    } else if (arg === '--skip-clicks') {
+    } else if (arg === "--max-actions" || arg === "-m") {
+      config.maxActionsPerHour =
+        parseInt(args[++i] ?? "", 10) || config.maxActionsPerHour;
+    } else if (arg === "--skip-clicks") {
       config.skipClicks = true;
-    } else if (arg === '--skip-quizzes') {
+    } else if (arg === "--skip-quizzes") {
       config.skipQuizzes = true;
-    } else if (arg === '--metrics') {
+    } else if (arg === "--metrics") {
       config.showMetrics = true;
-    } else if (arg === '--list-profiles') {
+    } else if (arg === "--list-profiles") {
       config.listProfiles = true;
-    } else if (arg === '--profile' || arg === '-p') {
+    } else if (arg === "--profile" || arg === "-p") {
       config.profileName = args[++i];
-    } else if (arg === '--help' || arg === '-h') {
+    } else if (arg === "--help" || arg === "-h") {
       console.log(`
 MS Rewards Agent - Automated Microsoft Rewards collector
 
@@ -104,10 +116,10 @@ Example:
 
 const main = async () => {
   const config = parseArgs();
-  const metrics = new MetricsStore('./.rewards-metrics.json');
+  const metrics = new MetricsStore("./.rewards-metrics.json");
   const logger = initLogger({
-    filePath: './.rewards.log',
-    minLevel: config.dryRun ? 'debug' : 'info',
+    filePath: "./.rewards.log",
+    minLevel: config.dryRun ? "debug" : "info",
   });
 
   // List Edge profiles and exit
@@ -120,32 +132,49 @@ const main = async () => {
   if (config.profileName) {
     const resolved = resolveProfileByName(config.profileName);
     if (!resolved) {
-      console.error(`Error: No Edge profile found matching "${config.profileName}".`);
-      console.error('Run with --list-profiles to see available profiles.');
+      console.error(
+        `Error: No Edge profile found matching "${config.profileName}".`,
+      );
+      console.error("Run with --list-profiles to see available profiles.");
       process.exit(1);
     }
-    config.userDataDir = resolved.userDataDir;
+
+    // Warn if Edge is running (profile data may be incomplete)
+    if (isEdgeRunning()) {
+      console.log(
+        "Note: Edge is currently running. Profile data will be copied from the latest saved state.",
+      );
+    }
+
+    // Copy profile to an isolated directory to avoid lock conflicts with running Edge
+    console.log(
+      `Using Edge profile: "${config.profileName}" (folder: ${resolved.profileDir})`,
+    );
+    config.userDataDir = copyProfileToIsolated(resolved.profileDir);
     config.profileDir = resolved.profileDir;
-    console.log(`Using Edge profile: "${config.profileName}" (folder: ${resolved.profileDir})`);
   }
 
   // Show metrics only if requested
   if (config.showMetrics) {
     const summary = metrics.getSummary();
-    console.log('\n=== Metrics Summary ===');
+    console.log("\n=== Metrics Summary ===");
     console.log(`Total Runs: ${summary.totalRuns}`);
     console.log(`Today's Points: ${summary.todayPoints}`);
     console.log(`Success Rate: ${(summary.successRate * 100).toFixed(1)}%`);
     console.log(`Avg Duration: ${summary.avgDuration.toFixed(0)}ms`);
     console.log(`\nBy Handler:`);
     for (const [handler, stats] of Object.entries(summary.handlerStats)) {
-      console.log(`  ${handler}: ${stats.runs} runs (${(stats.successRate * 100).toFixed(1)}% success)`);
+      console.log(
+        `  ${handler}: ${stats.runs} runs (${(stats.successRate * 100).toFixed(1)}% success)`,
+      );
     }
     process.exit(0);
   }
 
-  console.log('MS Rewards Agent Starting...');
-  console.log(`  Mode: ${config.dryRun ? 'DRY-RUN (no real actions)' : 'LIVE'}`);
+  console.log("MS Rewards Agent Starting...");
+  console.log(
+    `  Mode: ${config.dryRun ? "DRY-RUN (no real actions)" : "LIVE"}`,
+  );
   console.log(`  User Data: ${config.userDataDir}`);
   if (config.profileDir) {
     console.log(`  Edge Profile: ${config.profileName} (${config.profileDir})`);
@@ -153,12 +182,14 @@ const main = async () => {
   console.log(`  Max Actions/Hour: ${config.maxActionsPerHour}`);
   console.log(`  Skip Clicks: ${config.skipClicks}`);
   console.log(`  Skip Quizzes: ${config.skipQuizzes}`);
-  console.log('');
+  console.log("");
 
   if (!config.dryRun) {
-    console.log('⚠️  WARNING: Running in LIVE mode. Actions will be performed.');
-    console.log('⚠️  Use --dry-run for safe testing.');
-    console.log('');
+    console.log(
+      "⚠️  WARNING: Running in LIVE mode. Actions will be performed.",
+    );
+    console.log("⚠️  Use --dry-run for safe testing.");
+    console.log("");
   }
 
   const browser = new BrowserAdapter();
@@ -171,34 +202,46 @@ const main = async () => {
 
     // Run Click Handler
     if (!config.skipClicks) {
-      console.log('\n=== Running Click Handler ===');
-      logger.info('Starting ClickHandler');
+      console.log("\n=== Running Click Handler ===");
+      logger.info("Starting ClickHandler");
       const clickHandler = new ClickHandler(browser, {
         dryRun: config.dryRun,
         maxActionsPerHour: config.maxActionsPerHour,
       });
       const clickResult = await clickHandler.run(page);
-      results.push({ handler: 'ClickHandler', result: clickResult });
-      logger.logResult('ClickHandler', clickResult);
-      metrics.recordRun('ClickHandler', clickResult.status, clickResult.durationMs, clickResult.attempts, clickResult.meta);
+      results.push({ handler: "ClickHandler", result: clickResult });
+      logger.logResult("ClickHandler", clickResult);
+      metrics.recordRun(
+        "ClickHandler",
+        clickResult.status,
+        clickResult.durationMs,
+        clickResult.attempts,
+        clickResult.meta,
+      );
     }
 
     // Run Quiz Handler
     if (!config.skipQuizzes) {
-      console.log('\n=== Running Quiz Handler ===');
-      logger.info('Starting QuizHandler');
+      console.log("\n=== Running Quiz Handler ===");
+      logger.info("Starting QuizHandler");
       const quizHandler = new QuizHandler(browser, {
         dryRun: config.dryRun,
         maxActionsPerHour: config.maxActionsPerHour,
       });
       const quizResult = await quizHandler.run(page);
-      results.push({ handler: 'QuizHandler', result: quizResult });
-      logger.logResult('QuizHandler', quizResult);
-      metrics.recordRun('QuizHandler', quizResult.status, quizResult.durationMs, quizResult.attempts, quizResult.meta);
+      results.push({ handler: "QuizHandler", result: quizResult });
+      logger.logResult("QuizHandler", quizResult);
+      metrics.recordRun(
+        "QuizHandler",
+        quizResult.status,
+        quizResult.durationMs,
+        quizResult.attempts,
+        quizResult.meta,
+      );
     }
 
     // Print summary
-    console.log('\n=== Run Summary ===');
+    console.log("\n=== Run Summary ===");
     for (const { handler, result } of results) {
       console.log(`\n${handler}:`);
       console.log(`  Status: ${result.status}`);
@@ -210,16 +253,18 @@ const main = async () => {
     }
 
     // Keep open briefly to inspect
-    await new Promise(r => setTimeout(r, 3000));
-
+    await new Promise((r) => setTimeout(r, 3000));
   } catch (err) {
-    console.error('Fatal Error:', err);
-    logger.error('Fatal error occurred', err instanceof Error ? err : String(err));
+    console.error("Fatal Error:", err);
+    logger.error(
+      "Fatal error occurred",
+      err instanceof Error ? err : String(err),
+    );
     process.exit(1);
   } finally {
     await browser.close();
-    console.log('\nAgent finished.');
-    logger.info('Agent finished');
+    console.log("\nAgent finished.");
+    logger.info("Agent finished");
     logger.close();
   }
 };
