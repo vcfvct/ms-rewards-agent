@@ -7,8 +7,9 @@ An automated Microsoft Rewards point collector built with **Node.js**, **TypeScr
 ## Features
 
 - 🖱️ **Click Handler** - Completes daily activities on the Rewards dashboard, including "Explore on Bing" cards.
-- 🔎 **Contextual Search** - Automatically handles "Explore" activities by searching for the specific content described in the card.
-- 🧠 **Quiz Handler** - Answers quizzes using a robust brute-force strategy (tries answers until correct) to ensure completion.
+- 🔎 **Semantic Explore Search** - Matches "Explore" card descriptions against an embedding-powered query bank, with normalized-text fallback.
+- 🧠 **Quiz Handler** - Detects and attempts available quiz/poll activities with iterative option selection.
+- 📚 **Query Bank Builder** - Generates `data/query-bank.json` embeddings via a dedicated script.
 - 🎭 **Humanization** - Bezier curve mouse movements, random delays, human-like typing
 - 📊 **Metrics Tracking** - Tracks success rates, points earned, and handler performance
 - 🔒 **Dry-Run Mode** - Test without performing real actions
@@ -19,6 +20,9 @@ An automated Microsoft Rewards point collector built with **Node.js**, **TypeScr
 ```bash
 # Install dependencies
 pnpm install
+
+# Optional: prebuild semantic query bank (otherwise auto-builds on first run)
+pnpm run build:query-bank
 
 # Build TypeScript
 pnpm run build
@@ -77,12 +81,17 @@ src/
 │   ├── click-handler.ts      # Daily activities + Explore searches
 │   └── quiz-handler.ts       # Quiz detection & answering
 ├── utils/
-│   ├── edge-profiles.ts         # Edge profile scanning & selection
-│   ├── humanizer.ts             # Mouse paths, delays, typing
-│   ├── storage.ts               # Metrics persistence
-│   └── logger.ts                # Structured JSON logging
-└── types/
-    └── index.ts              # Shared TypeScript interfaces
+│   ├── embeddings.ts          # Embedding model + semantic query-bank matching
+│   ├── edge-profiles.ts       # Edge profile scanning & selection
+│   ├── humanizer.ts           # Mouse paths, delays, typing
+│   ├── storage.ts             # Metrics persistence
+│   └── logger.ts              # Structured JSON logging
+├── scripts/
+│   └── build-query-bank.ts    # Generates data/query-bank.json
+├── types/
+│   └── index.ts              # Shared TypeScript interfaces
+└── data/
+    └── query-bank.json       # Precomputed query embeddings
 ```
 
 ## Data Flow
@@ -107,9 +116,11 @@ src/
 │        ClickHandler           │       │          QuizHandler          │
 │                               │       │                               │
 │ • Navigate to rewards.bing    │       │ • Find quiz activities        │
-│ • Identify "Explore" vs       │       │ • Detect quiz type            │
-│   standard cards              │       │ • Brute-force/Backtrack logic │
-│ • Click activity              │       │ • Cache successful answers    │
+│ • Identify "Explore" vs       │       │ • Locate answer options       │
+│   standard cards              │       │ • Iterative option attempts   │
+│ • Click activity              │       │ • Check completion indicators │
+│ • For "Explore": semantic     │       │                               │
+│   query-bank match fallback   │       │                               │
 │ • If "Explore": Run search    │       │                               │
 └───────────────────────────────┘       └───────────────────────────────┘
         │                                               │
@@ -124,7 +135,7 @@ src/
 ┌─────────────────────────────────────────────────────────────────┐
 │                    MetricsStore + Logger                        │
 │  • Records run statistics to .rewards-metrics.json              │
-│  • Logs structured JSON to data/logs/agent.jsonl                │
+│  • Logs structured JSON lines to .rewards.log                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -154,14 +165,19 @@ for (const char of text) {
 
 ### Contextual Search
 
-For "Explore on Bing" cards, the agent extracts the description text from the card and uses it as the search query. This ensures the search is relevant to the required task.
+For "Explore on Bing" cards, the agent tries semantic matching first:
+1. Extracts and normalizes card description text
+2. Embeds the description with `Xenova/all-MiniLM-L6-v2`
+3. Finds the best cosine-similarity match in `data/query-bank.json`
+4. Falls back to normalized description/title if no match passes threshold
 
 ### Quiz Strategy
 
-The agent uses a robust iterative approach for quizzes:
-1.  **Iterate**: Attempts to answer questions efficiently.
-2.  **Retry**: If an answer is incorrect, it retries immediately until the correct option is found.
-3.  **Completion**: Monitors the quiz progress indicator until 100% completion is detected to ensure full points.
+The agent uses an iterative option-click strategy:
+1.  Opens detected quiz/poll activities
+2.  Locates answer options from known selector sets
+3.  Clicks through options and checks completion indicators
+4.  Stops when completion is detected or timeout is reached
 
 ### Rate Limiting
 
@@ -187,16 +203,16 @@ pnpm exec vitest run tests/unit/click-handler.test.ts
 pnpm exec vitest run --coverage
 ```
 
-**Test Coverage**: 79 tests across 8 test files covering handlers, utilities, and integration scenarios.
+**Note**: The exact test count can change over time; use `pnpm run test` as the source of truth.
 
 ## Configuration Files
 
 | File | Purpose |
 |------|---------|
 | `.rewards-metrics.json` | Persisted metrics (runs, points, success rates) |
-| `.rewards-qa-cache.json` | Cached quiz Q&A pairs for learning |
-| `data/logs/agent.jsonl` | Structured JSON log output |
-| `user_data/` | Edge browser profile (cookies, session) |
+| `.rewards.log` | Structured JSON-line log output |
+| `data/query-bank.json` | Semantic query bank used for Explore search matching |
+| `~/.ms-rewards-agent/edge-profile` | Default isolated Edge user-data directory |
 
 ## Development
 

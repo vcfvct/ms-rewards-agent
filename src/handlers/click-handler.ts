@@ -2,6 +2,7 @@ import type { Page, Locator } from 'playwright';
 import type { TaskHandler, ActionResult, RunConfig } from '../types';
 import { BrowserAdapter } from '../core/browser-adapter';
 import { randomDelay } from '../utils/humanizer';
+import { matchQueryBank } from '../utils/embeddings';
 
 interface ActivityInfo {
   index: number;
@@ -41,16 +42,21 @@ export class ClickHandler implements TaskHandler {
     return cleaned || trimmed;
   }
 
-  private getExploreQuery(activity: ActivityInfo): string {
-    const desc = activity.description?.toLowerCase() ?? '';
+  private async getExploreQuery(activity: ActivityInfo): Promise<string> {
+    const desc = activity.description ?? '';
 
-    // Special-case overrides to avoid triggering real purchases or bookings
-    if (desc.includes('shopping list')) return 'iphone deals';
-    if (desc.includes('flight')) return 'iad to sfo';
-    if (desc.includes('direct you to your next adventure')) return 'White House directions';
-    if (desc.includes('specific stock')) return 'msft stock price';
+    // Try semantic matching against the query bank
+    if (desc) {
+      try {
+        const match = await matchQueryBank(this.normalizeExploreQuery(desc));
+        if (match) return match;
+      } catch (err) {
+        console.warn('[ClickHandler] Embedding match failed, using fallback:', err);
+      }
+    }
 
-    const fromDescription = activity.description ? this.normalizeExploreQuery(activity.description) : '';
+    // Fallback: normalize the description or title into a search query
+    const fromDescription = desc ? this.normalizeExploreQuery(desc) : '';
     if (fromDescription) return fromDescription;
     return this.normalizeExploreQuery(activity.title);
   }
@@ -148,6 +154,10 @@ export class ClickHandler implements TaskHandler {
         const isCompleted = (await card.locator('.mee-icon-SkypeCircleCheck, [aria-label*="complete" i], .c-glyph-check').count()) > 0;
         if (isCompleted) return null;
 
+        // Check for locked cards
+        const isLocked = (await card.locator('.points-locked, .mee-icon-Lock, .locked_img').count()) > 0;
+        if (isLocked) return null;
+
         // In "More activities", only keep cards that award points
         if (type === 'standard') {
           const hasPoints = await card.locator('[aria-label="Points you will earn"]').count() > 0;
@@ -240,13 +250,14 @@ export class ClickHandler implements TaskHandler {
       if (this.config.dryRun) {
         console.log(`[DRY-RUN] Would click: "${title}" (${activity.type})`);
         if (activity.type === 'explore') {
-          const query = this.getExploreQuery(activity);
+          const query = await this.getExploreQuery(activity);
           if (query) console.log(`[DRY-RUN] Would search: "${query}"`);
         }
         return { success: true, title };
       }
 
-      await locator.scrollIntoViewIfNeeded();
+      // scrollIntoViewIfNeeded is misspelled in playwright-core@1.58 types
+      await (locator as any).scrollIntoViewIfNeeded();
       await randomDelay(300, 800);
 
       // Click (humanized)
@@ -256,7 +267,7 @@ export class ClickHandler implements TaskHandler {
       await randomDelay(2000, 4000);
 
       if (activity.type === 'explore') {
-        const query = this.getExploreQuery(activity);
+        const query = await this.getExploreQuery(activity);
         if (!query) return { success: true, title };
 
         console.log(`[ClickHandler] Explore activity: Searching for "${query}"`);
@@ -291,7 +302,7 @@ export class ClickHandler implements TaskHandler {
         await this.browser.humanizer.clearAndTypeHuman(targetPage, '#sb_form_q, [name="q"]', query);
         await randomDelay(120, 300);
         await targetPage.keyboard.press('Enter');
-        await randomDelay(2000, 3000); // Wait for search results
+        await randomDelay(3000, 4000); // Wait for search results
       }
 
       // Cleanup tabs
