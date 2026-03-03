@@ -60,3 +60,6 @@ user_data/
 # User Profile Data
 user_data/
 test-data/
+
+# Generated embeddings (rebuild with: pnpm run build:query-bank)
+data/query-bank.json
