@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ClickHandler } from '../../src/handlers/click-handler';
 import type { BrowserAdapter } from '../../src/core/browser-adapter';
 
+// Mock the embeddings module to prevent model loading in tests
+vi.mock('../../src/utils/embeddings', () => ({
+  matchQueryBank: vi.fn().mockResolvedValue(null),
+}));
+
 // Mock the humanizer module to avoid real delays in tests
 vi.mock('../../src/utils/humanizer', () => ({
   randomDelay: vi.fn().mockResolvedValue(undefined),

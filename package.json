@@ -8,9 +8,11 @@
     "build": "tsc",
     "lint": "eslint src/**",
     "format": "prettier --write src/**",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:query-bank": "tsx scripts/build-query-bank.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "@types/node": "^22.0.0",
     "playwright": "^1.58.0",
     "playwright-core": "^1.58.0",
@@ -30,7 +32,10 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "onnxruntime-node",
+      "protobufjs",
+      "sharp"
     ]
   }
 }
