@@ -47,7 +47,6 @@ export const SEARCH_TERMS: string[] = [
   'homes for sale near me',
   'job openings near me',
   'best podcasts to listen to',
-  'best documentaries to watch',
   'best national parks to visit',
   'upcoming concerts near me',
   'best museums to visit',
@@ -105,6 +104,7 @@ export const SEARCH_TERMS: string[] = [
   'fantasy football tips',
   'how to start investing',
   'diy home decor ideas',
+  'USPS tracking',
 ];
 
 // ---------------------------------------------------------------------------

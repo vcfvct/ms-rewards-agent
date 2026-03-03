@@ -48,7 +48,7 @@ export class ClickHandler implements TaskHandler {
     // Try semantic matching against the query bank
     if (desc) {
       try {
-        const match = await matchQueryBank(desc);
+        const match = await matchQueryBank(this.normalizeExploreQuery(desc));
         if (match) return match;
       } catch (err) {
         console.warn('[ClickHandler] Embedding match failed, using fallback:', err);
@@ -153,6 +153,10 @@ export class ClickHandler implements TaskHandler {
         // Check for completion
         const isCompleted = (await card.locator('.mee-icon-SkypeCircleCheck, [aria-label*="complete" i], .c-glyph-check').count()) > 0;
         if (isCompleted) return null;
+
+        // Check for locked cards
+        const isLocked = (await card.locator('.points-locked, .mee-icon-Lock, .locked_img').count()) > 0;
+        if (isLocked) return null;
 
         // In "More activities", only keep cards that award points
         if (type === 'standard') {
@@ -298,7 +302,7 @@ export class ClickHandler implements TaskHandler {
         await this.browser.humanizer.clearAndTypeHuman(targetPage, '#sb_form_q, [name="q"]', query);
         await randomDelay(120, 300);
         await targetPage.keyboard.press('Enter');
-        await randomDelay(2000, 3000); // Wait for search results
+        await randomDelay(3000, 4000); // Wait for search results
       }
 
       // Cleanup tabs
