@@ -235,6 +235,116 @@ describe('ClickHandler', () => {
     });
   });
 
+  describe('locked card detection', () => {
+    it('should skip cards with img[alt="Offer is locked"]', async () => {
+      const lockedCard: any = {
+        count: vi.fn().mockResolvedValue(1),
+        nth: vi.fn().mockReturnThis(),
+        isVisible: vi.fn().mockResolvedValue(true),
+        locator: vi.fn().mockImplementation((selector: string) => {
+          // Not completed
+          if (selector.includes('SkypeCircleCheck') || selector.includes('complete')) {
+            return { count: vi.fn().mockResolvedValue(0) };
+          }
+          // Locked: img with alt "Offer is locked" is present
+          if (selector.includes('Offer is locked') || selector.includes('points-locked') || selector.includes('mee-icon-Lock')) {
+            return { count: vi.fn().mockResolvedValue(1) };
+          }
+          return {
+            count: vi.fn().mockResolvedValue(0),
+            first: vi.fn().mockReturnValue({
+              textContent: vi.fn().mockResolvedValue('Locked Activity'),
+            }),
+          };
+        }),
+      };
+
+      mockPage.locator = vi.fn().mockImplementation((selector: string) => {
+        if (selector.includes('h1,h2,h3,h4')) {
+          return {
+            filter: vi.fn().mockReturnThis(),
+            first: vi.fn().mockReturnThis(),
+            locator: vi.fn().mockImplementation(() => ({
+              locator: vi.fn().mockReturnValue(lockedCard),
+            })),
+          };
+        }
+        return mockLocator;
+      });
+
+      const handler = new ClickHandler(mockBrowser);
+      const result = await handler.run(mockPage);
+
+      // Locked card should be skipped → no activities processed
+      expect(result.status).toBe('skipped');
+    });
+
+    it('should NOT skip cards with img[alt="Offer is unlocked"]', async () => {
+      const unlockedCard: any = {
+        count: vi.fn().mockResolvedValue(1),
+        nth: vi.fn().mockReturnThis(),
+        isVisible: vi.fn().mockResolvedValue(true),
+        click: vi.fn().mockResolvedValue(undefined),
+        scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
+        boundingBox: vi.fn().mockResolvedValue({ x: 100, y: 100, width: 50, height: 30 }),
+        locator: vi.fn().mockImplementation((selector: string) => {
+          // Not completed
+          if (selector.includes('SkypeCircleCheck') || selector.includes('complete')) {
+            return { count: vi.fn().mockResolvedValue(0) };
+          }
+          // Only "Offer is locked" should count as locked — unlocked img should NOT trigger
+          if (selector.includes('points-locked') || selector.includes('mee-icon-Lock') || selector.includes('Offer is locked')) {
+            return { count: vi.fn().mockResolvedValue(0) };
+          }
+          // Link anchor
+          if (selector === 'a') {
+            return {
+              count: vi.fn().mockResolvedValue(1),
+              first: vi.fn().mockReturnValue({
+                count: vi.fn().mockResolvedValue(1),
+                click: vi.fn().mockResolvedValue(undefined),
+                scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
+                boundingBox: vi.fn().mockResolvedValue({ x: 100, y: 100, width: 50, height: 30 }),
+              }),
+            };
+          }
+          return {
+            count: vi.fn().mockResolvedValue(0),
+            first: vi.fn().mockReturnValue({
+              textContent: vi.fn().mockResolvedValue('Unlocked Activity'),
+            }),
+          };
+        }),
+      };
+
+      mockPage.locator = vi.fn().mockImplementation((selector: string) => {
+        // Explore section via XPath (contains 'mee-card')
+        if (selector.includes('mee-card')) {
+          return {
+            count: vi.fn().mockResolvedValue(1),
+            nth: vi.fn().mockReturnValue(unlockedCard),
+          };
+        }
+        if (selector.includes('h1,h2,h3,h4')) {
+          return {
+            filter: vi.fn().mockReturnThis(),
+            first: vi.fn().mockReturnThis(),
+            locator: vi.fn().mockImplementation(() => ({
+              locator: vi.fn().mockReturnValue({ count: vi.fn().mockResolvedValue(0) }),
+            })),
+          };
+        }
+        return mockLocator;
+      });
+
+      const handler = new ClickHandler(mockBrowser, { dryRun: true });
+      const result = await handler.run(mockPage);
+
+      // Unlocked card should NOT be skipped
+      expect(result.status).toBe('ok');
+    });
+  });
+
   describe('rate limiting', () => {
     it('should respect maxActionsPerHour config', async () => {
       const handler = new ClickHandler(mockBrowser, { maxActionsPerHour: 1 });
