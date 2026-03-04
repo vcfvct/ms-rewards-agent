@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { cosineSimilarity } from '../../src/utils/embeddings';
 
-// Mock the heavy dependencies so tests run instantly without downloading models
+// Mock heavy dependencies to avoid downloading models in tests
 vi.mock('@huggingface/transformers', () => ({
   pipeline: vi.fn(),
 }));
 
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  mkdir: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('cosineSimilarity', () => {
@@ -46,7 +48,6 @@ describe('matchQueryBank', () => {
     ];
     vi.mocked(readFile).mockResolvedValue(JSON.stringify(bank));
 
-    // Embed returns [1, 0, 0] → closest to "iphone deals"
     const transformers = await import('@huggingface/transformers');
     (vi.mocked(transformers.pipeline) as any).mockResolvedValue(
       vi.fn().mockResolvedValue({ data: new Float32Array([1, 0, 0]) }),
@@ -66,7 +67,6 @@ describe('matchQueryBank', () => {
     ];
     vi.mocked(readFile).mockResolvedValue(JSON.stringify(bank));
 
-    // Embed returns orthogonal vector → similarity ≈ 0
     const transformers = await import('@huggingface/transformers');
     (vi.mocked(transformers.pipeline) as any).mockResolvedValue(
       vi.fn().mockResolvedValue({ data: new Float32Array([0, 1, 0]) }),
@@ -77,5 +77,24 @@ describe('matchQueryBank', () => {
 
     const result = await matchQueryBank('something totally unrelated', 0.5);
     expect(result).toBeNull();
+  });
+
+  it('should auto-build query bank when file is missing', async () => {
+    const fsp = await import('node:fs/promises');
+    vi.mocked(fsp.readFile).mockRejectedValue(new Error('ENOENT'));
+
+    const transformers = await import('@huggingface/transformers');
+    (vi.mocked(transformers.pipeline) as any).mockResolvedValue(
+      vi.fn().mockResolvedValue({ data: new Float32Array([0.5, 0.5, 0.5]) }),
+    );
+
+    vi.resetModules();
+    const { loadQueryBank } = await import('../../src/utils/embeddings');
+
+    const bank = await loadQueryBank();
+    expect(bank.length).toBeGreaterThan(0);
+    expect(bank[0]).toHaveProperty('query');
+    expect(bank[0]).toHaveProperty('embedding');
+    expect(fsp.writeFile).toHaveBeenCalled();
   });
 });
