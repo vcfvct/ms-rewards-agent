@@ -155,7 +155,7 @@ export class ClickHandler implements TaskHandler {
         if (isCompleted) return null;
 
         // Check for locked cards
-        const isLocked = (await card.locator('.points-locked, .mee-icon-Lock, img[alt="Offer is locked"]').count()) > 0;
+        const isLocked = (await card.locator('.points-locked, .mee-icon-Lock, img[alt="Offer is Locked"]').count()) > 0;
         if (isLocked) return null;
 
         // In "More activities", only keep cards that award points
