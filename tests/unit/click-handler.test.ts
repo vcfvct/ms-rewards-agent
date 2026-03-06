@@ -73,6 +73,14 @@ describe('ClickHandler', () => {
     });
   });
 
+  describe('explore query normalization', () => {
+    it('should strip "search using bing to" prefix', () => {
+      const handler = new ClickHandler(mockBrowser);
+      const normalized = (handler as any).normalizeExploreQuery('Search using Bing to translate any word you want');
+      expect(normalized).toBe('translate any word you want');
+    });
+  });
+
   describe('run', () => {
     it('should navigate to rewards page', async () => {
       const handler = new ClickHandler(mockBrowser);

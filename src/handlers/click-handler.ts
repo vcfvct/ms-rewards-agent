@@ -34,9 +34,10 @@ export class ClickHandler implements TaskHandler {
     // Examples we want to normalize:
     // - "Search on Bing for best pizza" -> "best pizza"
     // - "Search on Bing to learn about whales" -> "learn about whales"
+    // - "Search using Bing to discover local events" -> "discover local events"
     // Handle case-insensitively and allow extra whitespace/punctuation.
     const cleaned = trimmed
-      .replace(/^search\s+on\s+bing\s+(?:to|for)\s*[:\-–]?\s*/i, '')
+      .replace(/^search\s+(?:on|using)\s+bing\s+(?:to|for)\s*[:\-–]?\s*/i, '')
       .trim();
 
     return cleaned || trimmed;
