@@ -79,7 +79,7 @@ export interface RunMetric {
 export interface DailyPoints {
   date: string;
   points: number;
-  source: 'click' | 'search';
+  source: 'click';
 }
 
 export class MetricsStore {
@@ -112,7 +112,7 @@ export class MetricsStore {
   /**
    * Records daily points earned.
    */
-  recordPoints(points: number, source: 'click' | 'search'): void {
+  recordPoints(points: number, source: 'click'): void {
     const today = new Date().toISOString().split('T')[0]!;
 
     this.storage.update(data => {

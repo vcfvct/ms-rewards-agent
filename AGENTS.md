@@ -63,7 +63,7 @@ Organize imports in the following order, separated by a blank line:
 ```
 src/
   ├── core/          # Core logic (BrowserAdapter, Controller)
-  ├── handlers/      # Task handlers (click, search)
+  ├── handlers/      # Task handlers (click)
   ├── utils/         # Humanizer, Logger, Storage
   ├── types/         # Shared TypeScript interfaces
   └── index.ts       # Entry point
@@ -84,7 +84,7 @@ type RunConfig = {
 };
 
 type ActionResult = {
-  type: "click" | "search";
+  type: "click";
   status: "ok" | "failed" | "skipped";
   attempts: number;
   durationMs: number;

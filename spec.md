@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Concise, machine‑readable spec for an LLM agent to generate a Playwright + TypeScript project that automates Microsoft Rewards activities: click-only and search-based. Focus: modular handlers, persistent logged‑in session, humanization, observability, and conservative safety defaults.
+Concise, machine‑readable spec for an LLM agent to generate a Playwright + TypeScript project that automates Microsoft Rewards activities. Focus: modular handlers, persistent logged‑in session, humanization, observability, and conservative safety defaults.
 
 ## Quick verdict
 
@@ -13,7 +13,7 @@ Use Playwright + TypeScript. It provides robust DOM/network control, easy sessio
 Component Responsibility
 Controller Orchestrates runs, enforces rate limits, schedules tasks.
 BrowserAdapter Attach/launch persistent Playwright context; expose helpers.
-Handlers clickHandler, searchHandler (modular).
+Handlers clickHandler (modular).
 Humanizer Random delays, type simulation, mouse paths, jitter.
 Storage Local JSON/SQLite for logs, QA cache, metrics.
 CLI / Config Modes: dry-run, test-account, limits, seed.
@@ -28,7 +28,7 @@ type RunConfig = {
 };
 
 type ActionResult = {
-  type: "click" | "search";
+  type: "click";
   status: "ok" | "failed" | "skipped";
   attempts: number;
   durationMs: number;
@@ -48,20 +48,6 @@ Humanize: move mouse path → small pause → click (press/release).
 Verify: detect DOM change or points increment; retry up to 2 times.
 
 Output: ActionResult with points_gained if available.
-
-### Search handler
-
-Inputs: count, queryPool.
-
-Behavior:
-
-Pick varied queries from templates; typeLikeHuman then submit.
-
-Wait for results; optionally click 0–2 organic results and “read” (3–8s).
-
-Close tabs and return to Bing.
-
-Safety: randomized inter‑search delay; limit per hour.
 
 ## Humanization & safety rules
 
@@ -103,7 +89,7 @@ Prompt: Implement BrowserAdapter that attaches to userDataDir persistent context
 
 Implement handlers
 
-Prompt: Implement clickHandler, searchHandler per specs above; include retries, verification, and structured ActionResult.
+Prompt: Implement clickHandler per specs above; include retries, verification, and structured ActionResult.
 
 Humanizer utilities
 
@@ -123,6 +109,4 @@ M1 Repo skeleton + BrowserAdapter + CLI (dry-run).
 
 M2 Click handler + humanizer + unit tests.
 
-M3 Search handler + query pool + integration dry-run.
-
-M4 Test account integration, conservative rollout docs.
+M3 Test account integration, conservative rollout docs.

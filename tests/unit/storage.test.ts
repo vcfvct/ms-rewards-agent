@@ -102,7 +102,7 @@ describe('MetricsStore', () => {
   it('should record daily points', () => {
     const store = new MetricsStore(testMetricsPath);
     store.recordPoints(10, 'click');
-    store.recordPoints(20, 'search');
+    store.recordPoints(20, 'click');
 
     expect(store.getTodayPoints()).toBe(30);
   });
