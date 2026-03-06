@@ -12,6 +12,15 @@ vi.mock('node:fs/promises', () => ({
   mkdir: vi.fn().mockResolvedValue(undefined),
 }));
 
+type PipelineMock = {
+  mockResolvedValue: (value: unknown) => unknown;
+  mockRejectedValue: (value: unknown) => unknown;
+};
+
+function getPipelineMock(transformers: typeof import('@huggingface/transformers')): PipelineMock {
+  return vi.mocked(transformers.pipeline) as unknown as PipelineMock;
+}
+
 describe('cosineSimilarity', () => {
   it('should return 1 for identical vectors', () => {
     const v = [1, 0, 0];
@@ -43,13 +52,21 @@ describe('matchQueryBank', () => {
   it('should return the best matching search term above threshold', async () => {
     const { readFile } = await import('node:fs/promises');
     const bank = [
-      { query: 'iphone deals', embedding: [1, 0, 0] },
-      { query: 'iad to sfo flights', embedding: [0, 1, 0] },
+      {
+        intent: 'find the best iphone discounts',
+        searchTerm: 'best iphone deals',
+        embedding: [1, 0, 0],
+      },
+      {
+        intent: 'look for cheap flights today',
+        searchTerm: 'cheap flights to miami',
+        embedding: [0, 1, 0],
+      },
     ];
     vi.mocked(readFile).mockResolvedValue(JSON.stringify(bank));
 
     const transformers = await import('@huggingface/transformers');
-    (vi.mocked(transformers.pipeline) as any).mockResolvedValue(
+    getPipelineMock(transformers).mockResolvedValue(
       vi.fn().mockResolvedValue({ data: new Float32Array([1, 0, 0]) }),
     );
 
@@ -57,18 +74,22 @@ describe('matchQueryBank', () => {
     const { matchQueryBank } = await import('../../src/utils/embeddings');
 
     const result = await matchQueryBank('find the best shopping deal');
-    expect(result).toBe('iphone deals');
+    expect(result).toBe('best iphone deals');
   });
 
   it('should return null when below threshold', async () => {
     const { readFile } = await import('node:fs/promises');
     const bank = [
-      { query: 'iphone deals', embedding: [1, 0, 0] },
+      {
+        intent: 'find iphone discounts',
+        searchTerm: 'best iphone deals',
+        embedding: [1, 0, 0],
+      },
     ];
     vi.mocked(readFile).mockResolvedValue(JSON.stringify(bank));
 
     const transformers = await import('@huggingface/transformers');
-    (vi.mocked(transformers.pipeline) as any).mockResolvedValue(
+    getPipelineMock(transformers).mockResolvedValue(
       vi.fn().mockResolvedValue({ data: new Float32Array([0, 1, 0]) }),
     );
 
@@ -84,7 +105,7 @@ describe('matchQueryBank', () => {
     vi.mocked(fsp.readFile).mockRejectedValue(new Error('ENOENT'));
 
     const transformers = await import('@huggingface/transformers');
-    (vi.mocked(transformers.pipeline) as any).mockResolvedValue(
+    getPipelineMock(transformers).mockResolvedValue(
       vi.fn().mockResolvedValue({ data: new Float32Array([0.5, 0.5, 0.5]) }),
     );
 
@@ -93,8 +114,32 @@ describe('matchQueryBank', () => {
 
     const bank = await loadQueryBank();
     expect(bank.length).toBeGreaterThan(0);
-    expect(bank[0]).toHaveProperty('query');
+    expect(bank[0]).toHaveProperty('intent');
+    expect(bank[0]).toHaveProperty('searchTerm');
     expect(bank[0]).toHaveProperty('embedding');
+    expect(fsp.writeFile).toHaveBeenCalled();
+  });
+
+  it('should rebuild query bank when stored format is invalid', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const invalidBank = [
+      { query: 'legacy query field', embedding: [1, 0, 0] },
+    ];
+    vi.mocked(readFile).mockResolvedValue(JSON.stringify(invalidBank));
+
+    const transformers = await import('@huggingface/transformers');
+    getPipelineMock(transformers).mockResolvedValue(
+      vi.fn().mockResolvedValue({ data: new Float32Array([1, 0, 0]) }),
+    );
+
+    vi.resetModules();
+    const fsp = await import('node:fs/promises');
+    const { loadQueryBank } = await import('../../src/utils/embeddings');
+
+    const bank = await loadQueryBank();
+    expect(bank.length).toBeGreaterThan(0);
+    expect(bank[0]).toHaveProperty('intent');
+    expect(bank[0]).toHaveProperty('searchTerm');
     expect(fsp.writeFile).toHaveBeenCalled();
   });
 });

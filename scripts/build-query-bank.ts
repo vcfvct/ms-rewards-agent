@@ -1,5 +1,5 @@
 /**
- * (Re)generates data/query-bank.json from SEARCH_TERMS.
+ * (Re)generates data/query-bank.json from SEARCH_INTENTS.
  *
  * Usage:  pnpm run build:query-bank
  */
