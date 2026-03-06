@@ -1,6 +1,5 @@
 import { BrowserAdapter } from "./core/browser-adapter";
 import { ClickHandler } from "./handlers/click-handler";
-import { QuizHandler } from "./handlers/quiz-handler";
 import { MetricsStore } from "./utils/storage";
 import { initLogger } from "./utils/logger";
 import type { RunConfig, ActionResult } from "./types";
@@ -15,7 +14,6 @@ import {
 
 interface ExtendedConfig extends RunConfig {
   skipClicks: boolean;
-  skipQuizzes: boolean;
   showMetrics: boolean;
   listProfiles: boolean;
   profileName?: string;
@@ -57,7 +55,6 @@ function parseArgs(): ExtendedConfig {
     dryRun: false,
     maxActionsPerHour: 30,
     skipClicks: false,
-    skipQuizzes: false,
     showMetrics: false,
     listProfiles: false,
     profileName: undefined,
@@ -75,8 +72,6 @@ function parseArgs(): ExtendedConfig {
         parseInt(args[++i] ?? "", 10) || config.maxActionsPerHour;
     } else if (arg === "--skip-clicks") {
       config.skipClicks = true;
-    } else if (arg === "--skip-quizzes") {
-      config.skipQuizzes = true;
     } else if (arg === "--metrics") {
       config.showMetrics = true;
     } else if (arg === "--list-profiles") {
@@ -96,7 +91,6 @@ Options:
   --list-profiles        List available Edge profiles and exit
   -m, --max-actions      Maximum actions per hour (default: 30)
   --skip-clicks          Skip click activities
-  --skip-quizzes         Skip quiz activities
   --metrics              Show metrics summary and exit
   -h, --help             Show this help message
 
@@ -181,7 +175,6 @@ const main = async () => {
   }
   console.log(`  Max Actions/Hour: ${config.maxActionsPerHour}`);
   console.log(`  Skip Clicks: ${config.skipClicks}`);
-  console.log(`  Skip Quizzes: ${config.skipQuizzes}`);
   console.log("");
 
   if (!config.dryRun) {
@@ -217,26 +210,6 @@ const main = async () => {
         clickResult.durationMs,
         clickResult.attempts,
         clickResult.meta,
-      );
-    }
-
-    // Run Quiz Handler
-    if (!config.skipQuizzes) {
-      console.log("\n=== Running Quiz Handler ===");
-      logger.info("Starting QuizHandler");
-      const quizHandler = new QuizHandler(browser, {
-        dryRun: config.dryRun,
-        maxActionsPerHour: config.maxActionsPerHour,
-      });
-      const quizResult = await quizHandler.run(page);
-      results.push({ handler: "QuizHandler", result: quizResult });
-      logger.logResult("QuizHandler", quizResult);
-      metrics.recordRun(
-        "QuizHandler",
-        quizResult.status,
-        quizResult.durationMs,
-        quizResult.attempts,
-        quizResult.meta,
       );
     }
 

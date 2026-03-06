@@ -35,7 +35,7 @@ Standard `pnpm` scripts should be maintained in `package.json`. Agents should re
 ### Naming
 - **Variables/Functions**: `camelCase` (e.g., `maxActionsPerHour`, `clickElement`).
 - **Classes/Interfaces**: `PascalCase` (e.g., `BrowserAdapter`, `RunConfig`).
-- **Files**: `kebab-case.ts` (e.g., `browser-adapter.ts`, `quiz-handler.ts`).
+- **Files**: `kebab-case.ts` (e.g., `browser-adapter.ts`, `click-handler.ts`).
 - **Constants**: `UPPER_SNAKE_CASE` for global configuration constants (e.g., `DEFAULT_USER_AGENT`).
 
 ### Imports
@@ -63,7 +63,7 @@ Organize imports in the following order, separated by a blank line:
 ```
 src/
   ├── core/          # Core logic (BrowserAdapter, Controller)
-  ├── handlers/      # Task handlers (click, search, quiz)
+  ├── handlers/      # Task handlers (click, search)
   ├── utils/         # Humanizer, Logger, Storage
   ├── types/         # Shared TypeScript interfaces
   └── index.ts       # Entry point
@@ -84,7 +84,7 @@ type RunConfig = {
 };
 
 type ActionResult = {
-  type: "click" | "search" | "quiz";
+  type: "click" | "search";
   status: "ok" | "failed" | "skipped";
   attempts: number;
   durationMs: number;
@@ -143,7 +143,7 @@ This is the most important aspect of the bot to prevent detection.
 ### Commit Messages
 - Use conventional commits: `type(scope): description`.
 - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`.
-- Example: `feat(quiz): implement confidence scoring for answers`
+- Example: `feat(click): add semantic explore query matching`
 
 ### Source of Truth
 - Keep `spec.md` as the architectural source of truth.

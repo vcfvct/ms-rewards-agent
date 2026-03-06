@@ -8,7 +8,6 @@ An automated Microsoft Rewards point collector built with **Node.js**, **TypeScr
 
 - 🖱️ **Click Handler** - Completes daily activities on the Rewards dashboard, including "Explore on Bing" cards.
 - 🔎 **Semantic Explore Search** - Matches "Explore" card descriptions against an embedding-powered intent bank (`intent` -> `searchTerm`), with normalized-text fallback.
-- 🧠 **Quiz Handler** - Detects and attempts available quiz/poll activities with iterative option selection.
 - 📚 **Query Bank Builder** - Generates `data/query-bank.json` embeddings via a dedicated script.
 - 🧪 **Query Bank Similarity Debugger** - Embed custom sentences and print top-N closest query-bank matches with scores.
 - 🎭 **Humanization** - Bezier curve mouse movements, random delays, human-like typing
@@ -67,7 +66,6 @@ pnpm run debug:query-bank -- --top 8 "cheap iphone promos this week" "today nba 
 | `--list-profiles` | List available Edge profiles and exit | - |
 | `-m, --max-actions` | Maximum actions per hour | `30` |
 | `--skip-clicks` | Skip click activities | `false` |
-| `--skip-quizzes` | Skip quiz activities | `false` |
 | `--metrics` | Show metrics summary and exit | - |
 
 ### Profile Selection
@@ -94,8 +92,7 @@ src/
 ├── core/
 │   └── browser-adapter.ts    # Playwright wrapper with humanized methods
 ├── handlers/
-│   ├── click-handler.ts      # Daily activities + Explore searches
-│   └── quiz-handler.ts       # Quiz detection & answering
+│   └── click-handler.ts      # Daily activities + Explore searches
 ├── utils/
 │   ├── embeddings.ts          # Embedding model + semantic query-bank matching
 │   ├── edge-profiles.ts       # Edge profile scanning & selection
@@ -126,21 +123,16 @@ src/
 │  • Wraps Playwright Page for all handlers                       │
 └─────────────────────────────────────────────────────────────────┘
                                 │
-        ┌───────────────────────┴───────────────────────┐
-        ▼                                               ▼
-┌───────────────────────────────┐       ┌───────────────────────────────┐
-│        ClickHandler           │       │          QuizHandler          │
-│                               │       │                               │
-│ • Navigate to rewards.bing    │       │ • Find quiz activities        │
-│ • Identify "Explore" vs       │       │ • Locate answer options       │
-│   standard cards              │       │ • Iterative option attempts   │
-│ • Click activity              │       │ • Check completion indicators │
-│ • For "Explore": semantic     │       │                               │
-│   query-bank match fallback   │       │                               │
-│ • If "Explore": Run search    │       │                               │
-└───────────────────────────────┘       └───────────────────────────────┘
-        │                                               │
-        └───────────────────────┬───────────────────────┘
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        ClickHandler                              │
+│  • Navigate to rewards.bing.com                                  │
+│  • Identify "Explore" vs standard cards                          │
+│  • Click activity                                                │
+│  • For "Explore": semantic query-bank match → fallback to title  │
+│  • If "Explore": Run Bing search                                 │
+└─────────────────────────────────────────────────────────────────┘
+                                │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        ActionResult                             │
@@ -186,14 +178,6 @@ For "Explore on Bing" cards, the agent tries semantic matching first:
 2. Embeds the description with `Xenova/all-MiniLM-L6-v2`
 3. Finds the best cosine-similarity `intent` match in `data/query-bank.json`
 4. Uses the matched `searchTerm` as the search term (fallback: normalized description/title)
-
-### Quiz Strategy
-
-The agent uses an iterative option-click strategy:
-1. Opens detected quiz/poll activities
-2. Locates answer options from known selector sets
-3. Clicks through options and checks completion indicators
-4. Stops when completion is detected or timeout is reached
 
 ### Rate Limiting
 

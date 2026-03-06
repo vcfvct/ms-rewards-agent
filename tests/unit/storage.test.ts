@@ -140,7 +140,7 @@ describe('MetricsStore', () => {
     const store = new MetricsStore(testMetricsPath);
     store.recordRun('Handler1', 'ok', 100, 1);
     store.recordRun('Handler2', 'failed', 200, 2);
-    store.recordPoints(50, 'quiz');
+    store.recordPoints(50, 'click');
 
     const summary = store.getSummary();
     expect(summary.totalRuns).toBe(2);

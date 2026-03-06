@@ -165,13 +165,6 @@ export class ClickHandler implements TaskHandler {
           if (!hasPoints) return null;
         }
 
-        // Exclude quizzes for standard clicks (QuizHandler handles them)
-        // But keep them for Explore if needed (though Explore usually aren't quizzes)
-        if (type === 'standard') {
-          const isQuiz = await card.locator('.mee-icon-Question, [data-bi-id*="quiz" i], [data-bi-id*="poll" i]').count() > 0;
-          if (isQuiz) return null;
-        }
-
         // Fix: Exclude points string (often has c-heading class) from title detection
         const title = await card.locator('h3, .title, .c-heading:not(.pointsString)').first().textContent() || `Activity #${index}`;
         const description = await card.locator('.mee-paragraph, .description, [mee-paragraph], .c-paragraph-4').first().textContent().catch(() => undefined);
