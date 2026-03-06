@@ -6,7 +6,7 @@ export type RunConfig = {
 };
 
 export type ActionResult = {
-  type: "click" | "search" | "quiz";
+  type: "click";
   status: "ok" | "failed" | "skipped";
   attempts: number;
   durationMs: number;
