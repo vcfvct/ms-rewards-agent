@@ -4,108 +4,27 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { SEARCH_INTENTS } from './search-intents';
+export type { SearchIntent } from './search-intents';
+
 const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 
 interface QueryBankEntry {
-  query: string;
+  intent: string;
+  searchTerm: string;
   embedding: number[];
 }
 
-// One concrete search term per category.
-// Shared by both the build script and runtime auto-build fallback.
-export const SEARCH_TERMS: string[] = [
-  'best iphone deals',
-  'cheap flights to miami',
-  'directions to Statue of Liberty',
-  'msft stock price',
-  'best comedy movies',
-  'weather forecast this week',
-  'top rated restaurants nearby',
-  'nfl scores today',
-  'world news headlines',
-  'translation of word "hello" in japanese',
-  'easy pasta recipes',
-  'car rental near me',
-  'best hotel deals',
-  'popular tv shows to watch',
-  'best new video games',
-  'current time in China time zone',
-  'best smartphones 2025',
-  'best vacation destinations',
-  'workout routines for beginners',
-  'best dog breeds for families',
-  'home improvement ideas',
-  'best books to read',
-  'meaning of word "serendipity"',
-  'latest fashion trends',
-  'recent science discoveries',
-  'NASA space exploration',
-  'best electric cars',
-  'photography tips for beginners',
-  'gardening tips for spring',
-  'personal finance budgeting tips',
-  'homes for sale near me',
-  'job openings near me',
-  'best podcasts to listen to',
-  'best national parks to visit',
-  'upcoming concerts near me',
-  'best museums to visit',
-  'easy craft projects',
-  'free online courses',
-  'sustainable living tips',
-  'learn a new language online',
-  'famous historical events',
-  'Song "my heart will go on" lyrics',
-  'planets in the solar system',
-  'best board games for adults',
-  'new movies on streaming services',
-  'best manga and comics',
-  'top anime series to watch',
-  'guided meditation for stress',
-  'healthy meal prep ideas',
-  'best skincare routine',
-  'trending hairstyles',
-  'wedding planning checklist',
-  'best holiday gift ideas',
-  'local events this weekend',
-  'best amusement parks',
-  'largest aquariums in the world',
-  'best coffee shops near me',
-  'productivity tips for work',
-  'how to improve sleep quality',
-  'bitcoin price today',
-  'yoga poses for flexibility',
-  'best running shoes',
-  'how to start a garden',
-  'best camping gear',
-  'hiking trails near me',
-  'healthy smoothie recipes',
-  'best comedy specials',
-  'interior design ideas',
-  'electric vehicle charging stations',
-  'best noise cancelling headphones',
-  'how to save money on groceries',
-  'climate change facts',
-  'best albums of the year',
-  'art exhibitions near me',
-  'how to learn guitar',
-  'best strategy video games',
-  'meal delivery services',
-  'best beaches in the world',
-  'how to reduce stress',
-  'popular board games for kids',
-  'best true crime podcasts',
-  'upcoming movie releases',
-  'how to train a puppy',
-  'best budget laptops',
-  'renewable energy sources',
-  'famous landmarks around the world',
-  'best online shopping sites',
-  'fantasy football tips',
-  'how to start investing',
-  'diy home decor ideas',
-  'USPS package tracking',
-];
+interface QuestionAnswerQueryBankEntry {
+  question: string;
+  answer: string;
+  embedding: number[];
+}
+
+interface LegacyQueryBankEntry {
+  query: string;
+  embedding: number[];
+}
 
 // ---------------------------------------------------------------------------
 // Lazy singleton embedder
@@ -115,9 +34,10 @@ let embedderPromise: Promise<FeatureExtractionPipeline> | null = null;
 
 export function getEmbedder(): Promise<FeatureExtractionPipeline> {
   if (!embedderPromise) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const p: any = pipeline('feature-extraction', MODEL_ID, { dtype: 'fp32' });
-    embedderPromise = p as Promise<FeatureExtractionPipeline>;
+    const extractor = pipeline('feature-extraction', MODEL_ID, {
+      dtype: 'fp32',
+    }) as unknown;
+    embedderPromise = extractor as Promise<FeatureExtractionPipeline>;
   }
   return embedderPromise;
 }
@@ -158,18 +78,107 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 
 let queryBankCache: QueryBankEntry[] | null = null;
 
+function isNumberArray(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'number');
+}
+
+function parseStoredEntry(
+  value: unknown,
+): { entry: QueryBankEntry; isLegacy: boolean } | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<
+    QueryBankEntry &
+    QuestionAnswerQueryBankEntry &
+    LegacyQueryBankEntry
+  >;
+
+  if (
+    typeof candidate.intent === 'string' &&
+    typeof candidate.searchTerm === 'string' &&
+    isNumberArray(candidate.embedding)
+  ) {
+    return {
+      entry: {
+        intent: candidate.intent,
+        searchTerm: candidate.searchTerm,
+        embedding: candidate.embedding,
+      },
+      isLegacy: false,
+    };
+  }
+
+  if (
+    typeof candidate.question === 'string' &&
+    typeof candidate.answer === 'string' &&
+    isNumberArray(candidate.embedding)
+  ) {
+    return {
+      entry: {
+        intent: candidate.question,
+        searchTerm: candidate.answer,
+        embedding: candidate.embedding,
+      },
+      // Consider question/answer as compatible legacy, no forced rebuild required.
+      isLegacy: false,
+    };
+  }
+
+  if (typeof candidate.query === 'string' && isNumberArray(candidate.embedding)) {
+    return {
+      entry: {
+        intent: candidate.query,
+        searchTerm: candidate.query,
+        embedding: candidate.embedding,
+      },
+      isLegacy: true,
+    };
+  }
+
+  return null;
+}
+
+function parseStoredQueryBank(raw: string): { entries: QueryBankEntry[]; hasLegacyEntries: boolean } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (!Array.isArray(parsed)) return null;
+
+  const entries: QueryBankEntry[] = [];
+  let hasLegacyEntries = false;
+  for (const item of parsed) {
+    const parsedEntry = parseStoredEntry(item);
+    if (!parsedEntry) return null;
+    entries.push(parsedEntry.entry);
+    hasLegacyEntries = hasLegacyEntries || parsedEntry.isLegacy;
+  }
+
+  return { entries, hasLegacyEntries };
+}
+
+function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 function getQueryBankPath(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url));
   return resolve(thisDir, '../../data/query-bank.json');
 }
 
 export async function buildQueryBank(): Promise<QueryBankEntry[]> {
-  console.log(`[Embeddings] Building query bank (${SEARCH_TERMS.length} terms)...`);
+  console.log(`[Embeddings] Building query bank (${SEARCH_INTENTS.length} intents)...`);
   const bank: QueryBankEntry[] = [];
-  for (const term of SEARCH_TERMS) {
-    const raw = await embed(term);
+  for (const intent of SEARCH_INTENTS) {
+    const raw = await embed(intent.intent);
     const embedding = raw.map((v) => Math.round(v * 1e6) / 1e6);
-    bank.push({ query: term, embedding });
+    bank.push({
+      intent: intent.intent,
+      searchTerm: intent.searchTerm,
+      embedding,
+    });
   }
   const bankPath = getQueryBankPath();
   await mkdir(dirname(bankPath), { recursive: true });
@@ -189,11 +198,28 @@ export async function loadQueryBank(): Promise<QueryBankEntry[]> {
     // File missing — auto-build on first run
   }
 
-  if (raw) {
-    queryBankCache = JSON.parse(raw) as QueryBankEntry[];
-  } else {
+  if (!raw) {
     queryBankCache = await buildQueryBank();
+    return queryBankCache;
   }
+
+  const parsed = parseStoredQueryBank(raw);
+  if (!parsed) {
+    console.warn('[Embeddings] Invalid query bank format detected. Rebuilding from source intents...');
+    queryBankCache = await buildQueryBank();
+    return queryBankCache;
+  }
+
+  queryBankCache = parsed.entries;
+  if (parsed.hasLegacyEntries) {
+    console.log('[Embeddings] Legacy query-only query-bank format detected. Rebuilding with intent/searchTerm schema...');
+    try {
+      queryBankCache = await buildQueryBank();
+    } catch (err) {
+      console.warn(`[Embeddings] Failed to rebuild legacy query bank. Using legacy entries: ${formatError(err)}`);
+    }
+  }
+
   return queryBankCache;
 }
 
@@ -222,7 +248,7 @@ export async function matchQueryBank(
   if (!bestEntry || bestScore < threshold) return null;
 
   console.log(
-    `[Embeddings] Matched "${description.slice(0, 60)}" → "${bestEntry.query}" (score=${bestScore.toFixed(3)})`,
+    `[Embeddings] Matched "${description.slice(0, 60)}" → intent="${bestEntry.intent}" searchTerm="${bestEntry.searchTerm}" (score=${bestScore.toFixed(3)})`,
   );
-  return bestEntry.query;
+  return bestEntry.searchTerm;
 }

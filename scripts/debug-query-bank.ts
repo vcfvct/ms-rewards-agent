@@ -15,7 +15,7 @@ const DEFAULT_TOP_K = 5;
 
 const INPUT_SENTENCES: string[] = [
   'translate any word you want',
-  'the meaning of a word you don\'t understand.​',
+  'the meaning of a word you do not understand',
 ];
 
 type CliOptions = {
@@ -78,7 +78,8 @@ async function main(): Promise<void> {
     const sentenceEmbedding = await embed(sentence);
     const rankedMatches = queryBank
       .map((entry) => ({
-        query: entry.query,
+        intent: entry.intent,
+        searchTerm: entry.searchTerm,
         score: cosineSimilarity(sentenceEmbedding, entry.embedding),
       }))
       .sort((a, b) => b.score - a.score)
@@ -88,7 +89,9 @@ async function main(): Promise<void> {
     console.log(`Input: ${sentence}`);
     for (const [index, match] of rankedMatches.entries()) {
       const rank = String(index + 1).padStart(2, ' ');
-      console.log(`${rank}. score=${match.score.toFixed(4)}  query="${match.query}"`);
+      console.log(
+        `${rank}. score=${match.score.toFixed(4)}  searchTerm="${match.searchTerm}"  intent="${match.intent}"`,
+      );
     }
   }
 }
