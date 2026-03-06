@@ -10,6 +10,7 @@ An automated Microsoft Rewards point collector built with **Node.js**, **TypeScr
 - 🔎 **Semantic Explore Search** - Matches "Explore" card descriptions against an embedding-powered query bank, with normalized-text fallback.
 - 🧠 **Quiz Handler** - Detects and attempts available quiz/poll activities with iterative option selection.
 - 📚 **Query Bank Builder** - Generates `data/query-bank.json` embeddings via a dedicated script.
+- 🧪 **Query Bank Similarity Debugger** - Embed custom sentences and print top-N closest query-bank matches with scores.
 - 🎭 **Humanization** - Bezier curve mouse movements, random delays, human-like typing
 - 📊 **Metrics Tracking** - Tracks success rates, points earned, and handler performance
 - 🔒 **Dry-Run Mode** - Test without performing real actions
@@ -23,6 +24,9 @@ pnpm install
 
 # Optional: prebuild semantic query bank (otherwise auto-builds on first run)
 pnpm run build:query-bank
+
+# Optional: inspect top-N matches for custom sentences
+pnpm run debug:query-bank -- --top 5 "best cheap flights"
 
 # Build TypeScript
 pnpm run build
@@ -39,6 +43,18 @@ pnpm run start -- --metrics
 
 # Full run (use with caution)
 pnpm run start
+```
+
+### Query Bank Similarity Debugging
+
+Use this when tuning embedding-based Explore matching.
+
+```bash
+# 1) Edit INPUT_SENTENCES in scripts/debug-query-bank.ts
+pnpm run debug:query-bank
+
+# 2) Or pass sentences directly via CLI
+pnpm run debug:query-bank -- --top 8 "cheap iphone promos this week" "today nba scores"
 ```
 
 ### CLI Options
