@@ -15,17 +15,6 @@ interface QueryBankEntry {
   embedding: number[];
 }
 
-interface QuestionAnswerQueryBankEntry {
-  question: string;
-  answer: string;
-  embedding: number[];
-}
-
-interface LegacyQueryBankEntry {
-  query: string;
-  embedding: number[];
-}
-
 // ---------------------------------------------------------------------------
 // Lazy singleton embedder
 // ---------------------------------------------------------------------------
@@ -84,13 +73,9 @@ function isNumberArray(value: unknown): value is number[] {
 
 function parseStoredEntry(
   value: unknown,
-): { entry: QueryBankEntry; isLegacy: boolean } | null {
+): QueryBankEntry | null {
   if (!value || typeof value !== 'object') return null;
-  const candidate = value as Partial<
-    QueryBankEntry &
-    QuestionAnswerQueryBankEntry &
-    LegacyQueryBankEntry
-  >;
+  const candidate = value as Partial<QueryBankEntry>;
 
   if (
     typeof candidate.intent === 'string' &&
@@ -98,46 +83,16 @@ function parseStoredEntry(
     isNumberArray(candidate.embedding)
   ) {
     return {
-      entry: {
-        intent: candidate.intent,
-        searchTerm: candidate.searchTerm,
-        embedding: candidate.embedding,
-      },
-      isLegacy: false,
-    };
-  }
-
-  if (
-    typeof candidate.question === 'string' &&
-    typeof candidate.answer === 'string' &&
-    isNumberArray(candidate.embedding)
-  ) {
-    return {
-      entry: {
-        intent: candidate.question,
-        searchTerm: candidate.answer,
-        embedding: candidate.embedding,
-      },
-      // Consider question/answer as compatible legacy, no forced rebuild required.
-      isLegacy: false,
-    };
-  }
-
-  if (typeof candidate.query === 'string' && isNumberArray(candidate.embedding)) {
-    return {
-      entry: {
-        intent: candidate.query,
-        searchTerm: candidate.query,
-        embedding: candidate.embedding,
-      },
-      isLegacy: true,
+      intent: candidate.intent,
+      searchTerm: candidate.searchTerm,
+      embedding: candidate.embedding,
     };
   }
 
   return null;
 }
 
-function parseStoredQueryBank(raw: string): { entries: QueryBankEntry[]; hasLegacyEntries: boolean } | null {
+function parseStoredQueryBank(raw: string): QueryBankEntry[] | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw) as unknown;
@@ -148,19 +103,13 @@ function parseStoredQueryBank(raw: string): { entries: QueryBankEntry[]; hasLega
   if (!Array.isArray(parsed)) return null;
 
   const entries: QueryBankEntry[] = [];
-  let hasLegacyEntries = false;
   for (const item of parsed) {
     const parsedEntry = parseStoredEntry(item);
     if (!parsedEntry) return null;
-    entries.push(parsedEntry.entry);
-    hasLegacyEntries = hasLegacyEntries || parsedEntry.isLegacy;
+    entries.push(parsedEntry);
   }
 
-  return { entries, hasLegacyEntries };
-}
-
-function formatError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  return entries;
 }
 
 function getQueryBankPath(): string {
@@ -210,16 +159,7 @@ export async function loadQueryBank(): Promise<QueryBankEntry[]> {
     return queryBankCache;
   }
 
-  queryBankCache = parsed.entries;
-  if (parsed.hasLegacyEntries) {
-    console.log('[Embeddings] Legacy query-only query-bank format detected. Rebuilding with intent/searchTerm schema...');
-    try {
-      queryBankCache = await buildQueryBank();
-    } catch (err) {
-      console.warn(`[Embeddings] Failed to rebuild legacy query bank. Using legacy entries: ${formatError(err)}`);
-    }
-  }
-
+  queryBankCache = parsed;
   return queryBankCache;
 }
 

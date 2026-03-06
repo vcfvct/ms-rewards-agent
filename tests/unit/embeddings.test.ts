@@ -120,12 +120,12 @@ describe('matchQueryBank', () => {
     expect(fsp.writeFile).toHaveBeenCalled();
   });
 
-  it('should read legacy question/answer entries', async () => {
+  it('should rebuild query bank when stored format is invalid', async () => {
     const { readFile } = await import('node:fs/promises');
-    const legacyQuestionAnswerBank = [
-      { question: 'legacy question text', answer: 'legacy search term', embedding: [1, 0, 0] },
+    const invalidBank = [
+      { query: 'legacy query field', embedding: [1, 0, 0] },
     ];
-    vi.mocked(readFile).mockResolvedValue(JSON.stringify(legacyQuestionAnswerBank));
+    vi.mocked(readFile).mockResolvedValue(JSON.stringify(invalidBank));
 
     const transformers = await import('@huggingface/transformers');
     getPipelineMock(transformers).mockResolvedValue(
@@ -133,34 +133,13 @@ describe('matchQueryBank', () => {
     );
 
     vi.resetModules();
-    const { matchQueryBank } = await import('../../src/utils/embeddings');
-
-    const result = await matchQueryBank('legacy question text');
-    expect(result).toBe('legacy search term');
-  });
-
-  it('should fall back to legacy query-only entries when rebuild fails', async () => {
-    const { readFile } = await import('node:fs/promises');
-    const legacyBank = [
-      { query: 'legacy iphone query', embedding: [1, 0, 0] },
-    ];
-    vi.mocked(readFile).mockResolvedValue(JSON.stringify(legacyBank));
-
-    const transformers = await import('@huggingface/transformers');
-    getPipelineMock(transformers).mockRejectedValue(
-      new Error('model unavailable'),
-    );
-
-    vi.resetModules();
+    const fsp = await import('node:fs/promises');
     const { loadQueryBank } = await import('../../src/utils/embeddings');
 
     const bank = await loadQueryBank();
-    expect(bank).toEqual([
-      {
-        intent: 'legacy iphone query',
-        searchTerm: 'legacy iphone query',
-        embedding: [1, 0, 0],
-      },
-    ]);
+    expect(bank.length).toBeGreaterThan(0);
+    expect(bank[0]).toHaveProperty('intent');
+    expect(bank[0]).toHaveProperty('searchTerm');
+    expect(fsp.writeFile).toHaveBeenCalled();
   });
 });
