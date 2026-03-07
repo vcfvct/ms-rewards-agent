@@ -21,4 +21,5 @@ export const SEARCH_INTENTS: SearchIntent[] = [
   { intent: 'check stock price', searchTerm: 'msft stock price' },
   { intent: 'what time it is in a different time zone', searchTerm: 'current time in Tokyo time zone' },
   { intent: 'lyrics of your favorite song', searchTerm: 'Song "my heart will go on" lyrics' },
+  { intent: 'your favorite movie', searchTerm: 'movie "Avatar:  Fire and Ash"' },
 ];
