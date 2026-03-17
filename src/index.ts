@@ -69,7 +69,7 @@ function parseArgs(): ExtendedConfig {
       config.userDataDir = args[++i] || config.userDataDir;
     } else if (arg === "--max-actions" || arg === "-m") {
       config.maxActionsPerHour =
-        parseInt(args[++i] ?? "", 10) || config.maxActionsPerHour;
+        parseInt(args[++i] ?? "", 20) || config.maxActionsPerHour;
     } else if (arg === "--skip-clicks") {
       config.skipClicks = true;
     } else if (arg === "--metrics") {
