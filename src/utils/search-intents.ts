@@ -11,11 +11,7 @@ export const SEARCH_INTENTS: SearchIntent[] = [
   { intent: "find scrapbooking supplies", searchTerm: "scrapbooking supplies" },
   { intent: "search for directions", searchTerm: "map to Yellowstone" },
   {
-    intent: "plan your next adventure",
-    searchTerm: "map to nearest national park",
-  },
-  {
-    intent: "book rental cars for your next adventure",
+    intent: "book rental cars",
     searchTerm: "car rental near me",
   },
   { intent: "track your packages", searchTerm: "USPS package tracking" },
@@ -28,7 +24,7 @@ export const SEARCH_INTENTS: SearchIntent[] = [
     intent: "meaning of a word you do not understand",
     searchTerm: 'meaning of word "serendipity"',
   },
-  { intent: "search for flight deals", searchTerm: "cheap flights to iad" },
+  { intent: "search for flight deals for vacation", searchTerm: "cheap flights to iad" },
   { intent: "search smoothie recipes", searchTerm: "healthy smoothie recipes" },
   {
     intent: "search for diy home decor ideas",
