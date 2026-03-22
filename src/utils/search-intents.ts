@@ -10,6 +10,7 @@ export const SEARCH_INTENTS: SearchIntent[] = [
   // and package tracking prompts from Explore on Bing discussions.
   { intent: "find scrapbooking supplies", searchTerm: "scrapbooking supplies" },
   { intent: "search for directions", searchTerm: "map to Yellowstone" },
+  { intent: "find the latest currency conversion", searchTerm: "usd to rmb" },
   {
     intent: "book rental cars",
     searchTerm: "car rental near me",
