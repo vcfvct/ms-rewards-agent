@@ -12,7 +12,7 @@ export const SEARCH_INTENTS: SearchIntent[] = [
   { intent: "search for directions", searchTerm: "map to Yellowstone" },
   { intent: "find the latest currency conversion", searchTerm: "usd to rmb" },
   {
-    intent: "book rental cars",
+    intent: "rental cars",
     searchTerm: "car rental near me",
   },
   { intent: "track your packages", searchTerm: "USPS package tracking" },
@@ -25,7 +25,10 @@ export const SEARCH_INTENTS: SearchIntent[] = [
     intent: "meaning of a word you do not understand",
     searchTerm: 'meaning of word "serendipity"',
   },
-  { intent: "search for flight deals for vacation", searchTerm: "cheap flights to iad" },
+  {
+    intent: "search for flight deals for vacation",
+    searchTerm: "cheap flights to iad",
+  },
   { intent: "search smoothie recipes", searchTerm: "healthy smoothie recipes" },
   {
     intent: "search for diy home decor ideas",
@@ -43,5 +46,9 @@ export const SEARCH_INTENTS: SearchIntent[] = [
   {
     intent: "your favorite movie",
     searchTerm: 'movie "Avatar:  Fire and Ash"',
+  },
+  {
+    intent: "your favorite video game",
+    searchTerm: "Startcraft remastered",
   },
 ];
