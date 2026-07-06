@@ -28,7 +28,7 @@ export const SEARCH_INTENTS: SearchIntent[] = [
   },
   {
     intent: "search for flight deals for vacation",
-    searchTerm: "cheap flights to iad",
+    searchTerm: "cheap flights to yellowstone national park",
   },
   { intent: "search smoothie recipes", searchTerm: "healthy smoothie recipes" },
   {
