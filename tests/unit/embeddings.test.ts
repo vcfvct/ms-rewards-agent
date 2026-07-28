@@ -123,7 +123,7 @@ describe('matchQueryBank', () => {
   it('should rebuild query bank when stored format is invalid', async () => {
     const { readFile } = await import('node:fs/promises');
     const invalidBank = [
-      { query: 'legacy query field', embedding: [1, 0, 0] },
+      { query: 'invalid query-only entry', embedding: [1, 0, 0] },
     ];
     vi.mocked(readFile).mockResolvedValue(JSON.stringify(invalidBank));
 

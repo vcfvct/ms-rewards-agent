@@ -4,12 +4,14 @@ import { BrowserAdapter } from "../core/browser-adapter";
 import { randomDelay } from "../utils/humanizer";
 import { matchQueryBank } from "../utils/embeddings";
 
+const REWARDS_EARN_URL = "https://rewards.bing.com/earn";
+
 interface ActivityInfo {
   index: number;
   title: string;
   isCompleted: boolean;
   locator: Locator;
-  type: "standard" | "explore";
+  type: "daily" | "standard" | "explore";
   description?: string;
 }
 
@@ -65,23 +67,6 @@ export class ClickHandler implements TaskHandler {
     return this.normalizeExploreQuery(activity.title);
   }
 
-  private getCardsInSectionByHeading(
-    page: Page,
-    headingRegex: RegExp,
-  ): Locator {
-    const heading = page
-      .locator('h1,h2,h3,h4,[role="heading"]')
-      .filter({ hasText: headingRegex })
-      .first();
-
-    // Find the closest container that actually contains cards.
-    // The Rewards dashboard markup shifts often; avoid relying on specific class names.
-    const container = heading.locator(
-      "xpath=ancestor::*[self::section or self::div][.//mee-card][1]",
-    );
-    return container.locator("mee-card");
-  }
-
   async run(page: Page): Promise<ActionResult> {
     console.log(`[ClickHandler] Starting... (dryRun: ${this.config.dryRun})`);
     const result: ActionResult = {
@@ -94,8 +79,8 @@ export class ClickHandler implements TaskHandler {
     const startTime = Date.now();
 
     try {
-      // 1. Navigate to Rewards Dashboard
-      await this.browser.goto("https://rewards.bing.com/");
+      // 1. Navigate to the Rewards activities page
+      await this.browser.goto(REWARDS_EARN_URL);
       await randomDelay(2000, 4000);
 
       // 2. Find clickable reward activities
@@ -114,6 +99,7 @@ export class ClickHandler implements TaskHandler {
       // 3. Click activities (respect rate limit)
       const maxClicks = Math.min(20, this.config.maxActionsPerHour); // Increased limit as searches are gone
       let clickedCount = 0;
+      let previousActivityType: ActivityInfo["type"] | undefined;
 
       for (const activity of activities) {
         if (clickedCount >= maxClicks) {
@@ -123,8 +109,13 @@ export class ClickHandler implements TaskHandler {
           break;
         }
 
+        if (previousActivityType === "daily" && activity.type !== "daily") {
+          await this.closeDailySetDialog(page);
+        }
+
         result.attempts++;
         const clickResult = await this.clickActivity(page, activity);
+        previousActivityType = activity.type;
 
         if (clickResult.success) {
           clickedCount++;
@@ -136,6 +127,10 @@ export class ClickHandler implements TaskHandler {
 
         // Wait between clicks
         await randomDelay(2000, 4000);
+      }
+
+      if (previousActivityType === "daily") {
+        await this.closeDailySetDialog(page);
       }
 
       result.status = clickedCount > 0 ? "ok" : "failed";
@@ -155,66 +150,61 @@ export class ClickHandler implements TaskHandler {
    * Finds all clickable (incomplete) reward activities on the page.
    */
   private async findClickableActivities(page: Page): Promise<ActivityInfo[]> {
-    const activities: ActivityInfo[] = [];
+    return this.findEarnPageActivities(page);
+  }
 
-    // Helper to process a card
-    const processCard = async (
-      card: Locator,
-      type: "standard" | "explore",
-      index: number,
+  /**
+   * Finds activities in the current anchor-based Rewards Earn UI.
+   */
+  private async findEarnPageActivities(page: Page): Promise<ActivityInfo[]> {
+    const activities: ActivityInfo[] = [];
+    const exploreLinks = page.locator("#exploreonbing a");
+    const standardLinks = page.locator("#moreactivities a");
+    const dailySetOpener = page
+      .locator("#streaks button")
+      .filter({ hasText: /daily\s+set\s+streak/i })
+      .first();
+    const exploreCount = await exploreLinks.count();
+    const standardCount = await standardLinks.count();
+    const dailySetOpenerCount = await dailySetOpener.count();
+
+    if (exploreCount + standardCount + dailySetOpenerCount === 0) return [];
+
+    const processLink = async (
+      link: Locator,
+      type: ActivityInfo["type"],
     ): Promise<ActivityInfo | null> => {
       try {
-        if (!(await card.isVisible())) return null;
+        if (!(await link.isVisible())) return null;
 
-        // Check for completion
+        const text = (await link.textContent()) ?? "";
         const isCompleted =
-          (await card
-            .locator(
-              '.mee-icon-SkypeCircleCheck, [aria-label*="complete" i], .c-glyph-check',
-            )
-            .count()) > 0;
-        if (isCompleted) return null;
-
-        // Check for locked cards
+          /\bcompleted\b/i.test(text) ||
+          (await link.getByText(/^completed$/i).count()) > 0;
         const isLocked =
-          (await card
-            .locator(
-              '.points-locked, .mee-icon-Lock, img[alt="Offer is Locked"]',
-            )
-            .count()) > 0;
-        if (isLocked) return null;
+          (await link.getAttribute("data-disabled")) === "true" ||
+          /unlock(?:s|ed)?\b/i.test(text) ||
+          (await link.getByText(/^unlock(?:s|ed)?\b/i).count()) > 0;
+        if (isCompleted || isLocked) return null;
 
-        // In "More activities", only keep cards that award points
-        if (type === "standard") {
-          const hasPoints =
-            (await card
-              .locator('[aria-label="Points you will earn"]')
-              .count()) > 0;
-          if (!hasPoints) return null;
-        }
+        const paragraphs = link.locator("p");
+        const hasPoints =
+          (await paragraphs.filter({ hasText: /^\+\d+\s*$/ }).count()) > 0;
+        if (!hasPoints) return null;
 
-        // Fix: Exclude points string (often has c-heading class) from title detection
         const title =
-          (await card
-            .locator("h3, .title, .c-heading:not(.pointsString)")
-            .first()
-            .textContent()) || `Activity #${index}`;
-        const description = await card
-          .locator(
-            ".mee-paragraph, .description, [mee-paragraph], .c-paragraph-4",
-          )
-          .first()
+          (await paragraphs.first().textContent())?.trim() ||
+          `Activity #${activities.length}`;
+        const description = await paragraphs
+          .nth(1)
           .textContent()
           .catch(() => undefined);
-        const link = card.locator("a").first();
-
-        if ((await link.count()) === 0) return null;
 
         return {
-          index,
-          title: title.trim(),
+          index: activities.length,
+          title,
           isCompleted,
-          locator: link, // Click the link
+          locator: link,
           type,
           description: description?.trim(),
         };
@@ -223,70 +213,55 @@ export class ClickHandler implements TaskHandler {
       }
     };
 
-    // 1. "Daily set" Section
-    const dailySet = this.getCardsInSectionByHeading(page, /daily\s+set/i);
-    const dailyCount = await dailySet.count();
-    console.log(`[ClickHandler] Found ${dailyCount} daily-set cards`);
+    if (dailySetOpenerCount > 0 && (await dailySetOpener.isVisible())) {
+      try {
+        await this.browser.humanizer.clickLocatorHuman(page, dailySetOpener);
 
-    for (let i = 0; i < dailyCount; i++) {
-      const info = await processCard(
-        dailySet.nth(i),
-        "standard",
-        activities.length,
-      );
-      if (info) activities.push(info);
+        const dailySetDialog = page
+          .locator('[role="dialog"]')
+          .filter({ hasText: /daily\s+set\s+streak/i });
+        await dailySetDialog.waitFor({ state: "visible" });
+
+        const dailyLinks = dailySetDialog.locator("a");
+        const dailyCount = await dailyLinks.count();
+        console.log(`[ClickHandler] Found ${dailyCount} Daily Set sidebar links`);
+
+        for (let i = 0; i < dailyCount; i++) {
+          const info = await processLink(dailyLinks.nth(i), "daily");
+          if (info) activities.push(info);
+        }
+      } catch (error) {
+        console.warn("[ClickHandler] Could not inspect Daily Set sidebar:", error);
+      }
     }
 
-    // 2. "More activities" Section
-    // Prefer robust heading-based detection; keep old XPath as a fallback.
-    let moreActivities = this.getCardsInSectionByHeading(
-      page,
-      /more\s+activities/i,
-    );
-    let moreCount = await moreActivities.count();
-    if (moreCount === 0) {
-      moreActivities = page.locator(
-        '//h3[contains(text(), "More activities")]/ancestor::div[contains(@class, "mee-group-header")]/following-sibling::div//mee-card',
-      );
-      moreCount = await moreActivities.count();
-    }
-    console.log(`[ClickHandler] Found ${moreCount} more-activities cards`);
-
-    for (let i = 0; i < moreCount; i++) {
-      const info = await processCard(
-        moreActivities.nth(i),
-        "standard",
-        activities.length,
-      );
-      if (info) activities.push(info);
-    }
-
-    // 3. "Explore on Bing" Section
-    // We look for headers containing "Explore" (case-insensitive) to be more robust.
-    // We get the ancestors div which acts as the container, then find all mee-cards within it.
-    const exploreSection = page.locator(
-      '//h3[contains(translate(., "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "explore")]/ancestor::div[1]//mee-card',
-    );
-    const exploreCount = await exploreSection.count();
-    console.log(`[ClickHandler] Found ${exploreCount} explore cards`);
-
+    console.log(`[ClickHandler] Found ${exploreCount} Earn explore links`);
     for (let i = 0; i < exploreCount; i++) {
-      // Find if it has meme-paragraph to search
-      const info = await processCard(
-        exploreSection.nth(i),
-        "explore",
-        activities.length,
-      );
+      const info = await processLink(exploreLinks.nth(i), "explore");
       if (info) activities.push(info);
     }
 
-    // If sections aren't clearly labeled or using new UI, fallback to finding cards with "mee-paragraph" for explore?
-    // User requested specifically "Explore on Bing section". If not found, we skip.
+    console.log(`[ClickHandler] Found ${standardCount} Earn activity links`);
+    for (let i = 0; i < standardCount; i++) {
+      const info = await processLink(standardLinks.nth(i), "standard");
+      if (info) activities.push(info);
+    }
 
     return activities;
   }
 
-  // extractActivityInfo removed as it's merged into findClickableActivities logic or helper
+  private async closeDailySetDialog(page: Page): Promise<void> {
+    const dialog = page
+      .locator('[role="dialog"]')
+      .filter({ hasText: /daily\s+set\s+streak/i });
+    if ((await dialog.count()) === 0 || !(await dialog.isVisible())) return;
+
+    const closeButton = dialog.getByRole("button", { name: "Close" });
+    if ((await closeButton.count()) > 0) {
+      await this.browser.humanizer.clickLocatorHuman(page, closeButton);
+      await dialog.waitFor({ state: "hidden" });
+    }
+  }
 
   /**
    * Clicks on a single activity with humanized behavior.
@@ -307,8 +282,7 @@ export class ClickHandler implements TaskHandler {
         return { success: true, title };
       }
 
-      // scrollIntoViewIfNeeded is misspelled in playwright-core@1.58 types
-      await (locator as any).scrollIntoViewIfNeeded();
+      await locator.scrollIntoViewIfNeeded();
       await randomDelay(300, 800);
 
       // Click (humanized)
@@ -324,30 +298,14 @@ export class ClickHandler implements TaskHandler {
         console.log(
           `[ClickHandler] Explore activity: Searching for "${query}"`,
         );
-        // We might be on a new page or new tab.
-        // If new tab, we need to find it.
-        // Most rewards clicks open new tab.
         const pages = page.context().pages();
-        const nonDashboardPages = pages.filter((p) => p !== page);
+        const activityPages = pages.filter((candidate) => candidate !== page);
         const targetPage =
-          nonDashboardPages.length > 0
-            ? nonDashboardPages[nonDashboardPages.length - 1]!
+          activityPages.length > 0
+            ? activityPages[activityPages.length - 1]!
             : page;
 
         await targetPage.bringToFront();
-
-        // Assuming we are on Bing, or need to go to Bing.
-        // Usually these links go to a search page already.
-        // But user requirement: "click and search the text".
-        // Strategy: Use the browser adapter's search method on the target page.
-
-        // We must use the browser adapter to leverage human-like typing
-        // BUT browser adapter methods like .search() usually use this.getPage() which is the MAIN dashboard page.
-        // We need to execute search on the TARGET page (the new tab).
-
-        // Simplification: Just run the search on the active tab (targetPage).
-        // Since browser.search() relies on `this.getPage()`, we'll implement the search logic locally here
-        // OR update BrowserAdapter to accept a page.
 
         if (!targetPage.url().includes("bing.com")) {
           await targetPage.goto("https://www.bing.com");
@@ -371,12 +329,12 @@ export class ClickHandler implements TaskHandler {
         const p = pages.pop();
         if (p && p !== page) await p.close();
       }
-      await page.bringToFront(); // Focus back on dashboard
+      await page.bringToFront();
 
-      // If we used the main page for navigation (no new tab opened), we must go back to specific dashboard
+      // If the main page navigated away, return to the activities page.
       if (page.url().includes("bing.com/search")) {
-        console.log("[ClickHandler] Returning to dashboard...");
-        await this.browser.goto("https://rewards.bing.com/");
+        console.log("[ClickHandler] Returning to Rewards activities...");
+        await this.browser.goto(REWARDS_EARN_URL);
         await randomDelay(1000, 2000);
       }
 

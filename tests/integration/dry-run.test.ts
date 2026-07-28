@@ -95,12 +95,12 @@ describe('Integration: Dry-Run Mode', () => {
       expect(mockPage.click).not.toHaveBeenCalled();
     });
 
-    it('should navigate to rewards page', async () => {
+    it('should navigate to the Rewards Earn page', async () => {
       const handler = new ClickHandler(mockBrowser, { dryRun: true });
 
       await handler.run(mockPage);
 
-      expect(mockBrowser.goto).toHaveBeenCalledWith('https://rewards.bing.com/');
+      expect(mockBrowser.goto).toHaveBeenCalledWith('https://rewards.bing.com/earn');
     });
 
     it('should return structured result with meta', async () => {

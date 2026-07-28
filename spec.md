@@ -41,6 +41,16 @@ type ActionResult = {
 
 ### Click-only handler
 
+Navigate to `https://rewards.bing.com/earn` before discovering activities and return to that page after an activity navigates the main tab away.
+
+Use the current anchor-based Earn UI as the activity source:
+
+- Open `Daily Set Streak` and process point-bearing links from its dialog first.
+- Read Explore activities from `#exploreonbing`.
+- Read Keep earning activities from `#moreactivities`.
+
+Only visible links advertising a `+N` points value are actionable. Skip links marked `Completed`, disabled links, and links with an unlock status. Treat Explore cards marked `Activated` as actionable. Close the Daily Set dialog before processing other sections.
+
 Find activity by selector heuristics (text patterns, ARIA).
 
 Humanize: move mouse path → small pause → click (press/release).

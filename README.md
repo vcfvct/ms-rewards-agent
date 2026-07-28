@@ -6,7 +6,7 @@ An automated Microsoft Rewards point collector built with **Node.js**, **TypeScr
 
 ## Features
 
-- 🖱️ **Click Handler** - Completes daily activities on the Rewards dashboard, including "Explore on Bing" cards.
+- 🖱️ **Click Handler** - Completes activities on the Rewards Earn page, including the Daily Set Streak sidebar and "Explore on Bing" cards.
 - 🔎 **Semantic Explore Search** - Matches "Explore" card descriptions against an embedding-powered intent bank (`intent` -> `searchTerm`), with normalized-text fallback.
 - 📚 **Query Bank Builder** - Generates `data/query-bank.json` embeddings via a dedicated script.
 - 🧪 **Query Bank Similarity Debugger** - Embed custom sentences and print top-N closest query-bank matches with scores.
@@ -126,8 +126,9 @@ src/
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        ClickHandler                              │
-│  • Navigate to rewards.bing.com                                  │
-│  • Identify "Explore" vs standard cards                          │
+│  • Navigate to rewards.bing.com/earn                             │
+│  • Open Daily Set Streak and process its available task links    │
+│  • Read Explore on Bing and Keep earning activity links          │
 │  • Click activity                                                │
 │  • For "Explore": semantic query-bank match → fallback to title  │
 │  • If "Explore": Run Bing search                                 │
@@ -178,6 +179,16 @@ For "Explore on Bing" cards, the agent tries semantic matching first:
 2. Embeds the description with `Xenova/all-MiniLM-L6-v2`
 3. Finds the best cosine-similarity `intent` match in `data/query-bank.json`
 4. Uses the matched `searchTerm` as the search term (fallback: normalized description/title)
+
+The handler targets the current anchor-based Rewards Earn UI:
+
+- `Daily Set Streak` dialog links are processed first.
+- `#exploreonbing` provides Explore activities that require a Bing search.
+- `#moreactivities` provides point-bearing Keep earning activities.
+
+Only visible links with a `+N` points value are actionable. Cards marked `Completed`, disabled, or showing an unlock status are skipped. An `Activated` Explore card is ready for its search and remains actionable.
+
+Daily Set activities are exposed from the `Daily Set Streak` card in the Streaks section. The handler opens its sidebar, filters out the dashboard shortcut and completed entries, and processes available `+N` task links before the other Earn sections.
 
 ### Rate Limiting
 
