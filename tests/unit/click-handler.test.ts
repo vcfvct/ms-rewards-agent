@@ -58,6 +58,9 @@ describe('ClickHandler', () => {
     mockBrowser = {
       goto: vi.fn().mockResolvedValue(undefined),
       getPage: vi.fn().mockReturnValue(mockPage),
+      humanizer: {
+        clickLocatorHuman: vi.fn().mockResolvedValue(undefined),
+      },
     } as unknown as BrowserAdapter;
   });
 
@@ -82,11 +85,11 @@ describe('ClickHandler', () => {
   });
 
   describe('run', () => {
-    it('should navigate to rewards page', async () => {
+    it('should navigate to the Rewards Earn page', async () => {
       const handler = new ClickHandler(mockBrowser);
       await handler.run(mockPage);
 
-      expect(mockBrowser.goto).toHaveBeenCalledWith('https://rewards.bing.com/');
+      expect(mockBrowser.goto).toHaveBeenCalledWith('https://rewards.bing.com/earn');
     });
 
     it('should return skipped status when no activities found', async () => {
@@ -117,66 +120,86 @@ describe('ClickHandler', () => {
     });
   });
 
-  describe('dry-run mode', () => {
-    it('should not click in dry-run mode', async () => {
-      // Setup: simulate finding one activity
-      const mockActivityLocator = {
-        ...mockLocator,
-        count: vi.fn().mockResolvedValue(1),
-        isVisible: vi.fn().mockResolvedValue(true),
-        textContent: vi.fn().mockResolvedValue('Daily Activity'),
-        boundingBox: vi.fn().mockResolvedValue({ x: 100, y: 100, width: 50, height: 30 }),
-        scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
-      };
+  describe('Earn page discovery', () => {
+    it('should include activated point cards and skip completed or promotional links', async () => {
+      const createEarnLink = ({
+        title,
+        description,
+        points,
+        status,
+      }: {
+        title: string;
+        description: string;
+        points?: string;
+        status?: string;
+      }) => {
+        const paragraphTexts = [title, description, ...(points ? [points] : [])];
+        const textLocator = (text: string | undefined) => ({
+          textContent: vi.fn().mockResolvedValue(text),
+        });
 
-      // Setup nested locator behavior
-      mockActivityLocator.locator = vi.fn().mockImplementation((selector: string) => {
-        if (selector.includes('title') || selector.includes('heading')) {
-          return {
-            first: vi.fn().mockReturnValue({
-              textContent: vi.fn().mockResolvedValue('Test Activity'),
-            }),
-          };
-        }
-        if (selector === 'a') {
-          return {
-            first: vi.fn().mockReturnValue(mockActivityLocator),
-            count: vi.fn().mockResolvedValue(1),
-          };
-        }
-
-        // Default fallback for any other selector (description, completion, etc)
-        // Must provide methods called by processCard (first, count, textContent)
         return {
-          count: vi.fn().mockResolvedValue(0),
-          first: vi.fn().mockReturnValue({
-             textContent: vi.fn().mockRejectedValue(new Error('Not found')), // simulate missing element for catch clause
-             count: vi.fn().mockResolvedValue(0)
+          isVisible: vi.fn().mockResolvedValue(true),
+          textContent: vi.fn().mockResolvedValue(
+            [...paragraphTexts, ...(status ? [status] : [])].join(''),
+          ),
+          getAttribute: vi.fn().mockResolvedValue(null),
+          getByText: vi.fn().mockImplementation((pattern: RegExp) => ({
+            count: vi.fn().mockResolvedValue(status && pattern.test(status) ? 1 : 0),
+          })),
+          locator: vi.fn().mockImplementation((selector: string) => {
+            expect(selector).toBe('p');
+            return {
+              filter: vi.fn().mockImplementation(({ hasText }: { hasText: RegExp }) => ({
+                count: vi.fn().mockResolvedValue(
+                  paragraphTexts.some((text) => hasText.test(text)) ? 1 : 0,
+                ),
+              })),
+              first: vi.fn().mockReturnValue(textLocator(paragraphTexts[0])),
+              nth: vi.fn().mockImplementation((index: number) => textLocator(paragraphTexts[index])),
+            };
           }),
         };
+      };
+
+      const activatedExplore = createEarnLink({
+        title: 'Find deals on Bing',
+        description: 'Search on Bing to find items on your shopping list',
+        points: '+10',
+        status: 'Activated',
+      });
+      const completedExplore = createEarnLink({
+        title: 'Swipe smart',
+        description: 'Search on Bing for credit cards',
+        points: '10',
+        status: 'Completed',
+      });
+      const lockedExplore = createEarnLink({
+        title: 'Catch the show',
+        description: 'Search on Bing for concert tickets',
+        points: '+10',
+        status: 'Unlocks tomorrow',
+      });
+      const standardActivity = createEarnLink({
+        title: 'Serengeti adventure',
+        description: 'Witness Serengeti National Park',
+        points: '+15',
+      });
+      const promotion = createEarnLink({
+        title: 'New Wallpaper Every Day',
+        description: 'Install Bing Wallpaper today',
+      });
+      const locatorList = (items: unknown[]) => ({
+        count: vi.fn().mockResolvedValue(items.length),
+        nth: vi.fn().mockImplementation((index: number) => items[index]),
       });
 
       mockPage.locator = vi.fn().mockImplementation((selector: string) => {
-        // Heading locator used by getCardsInSectionByHeading
-        if (selector.includes('h1,h2,h3,h4') || selector.includes('heading')) {
-          const headingChain: any = {
-            filter: vi.fn().mockReturnThis(),
-            first: vi.fn().mockReturnThis(),
-            locator: vi.fn().mockImplementation(() => ({
-              locator: vi.fn().mockReturnValue({
-                count: vi.fn().mockResolvedValue(1),
-                nth: vi.fn().mockReturnValue(mockActivityLocator),
-              }),
-            })),
-          };
-          return headingChain;
+        if (selector === '#exploreonbing a') {
+          return locatorList([completedExplore, lockedExplore, activatedExplore]);
         }
-        // XPath fallback for mee-card selectors
-        if (selector.includes('mee-card')) {
-          return {
-            count: vi.fn().mockResolvedValue(1),
-            nth: vi.fn().mockReturnValue(mockActivityLocator),
-          };
+        if (selector === '#moreactivities a') {
+          return locatorList([promotion, standardActivity]);
         }
         return mockLocator;
       });
@@ -184,163 +207,79 @@ describe('ClickHandler', () => {
       const handler = new ClickHandler(mockBrowser, { dryRun: true });
       const result = await handler.run(mockPage);
 
-      // Should NOT have actually clicked
-      // We check the locator's click method, not browser.clickHuman since handler uses locator directly
-      expect(mockActivityLocator.click).not.toHaveBeenCalled();
-
-      // But should still report success in dry-run
-      expect(result.status).toBe('ok');
+      expect(result.meta?.clickedActivities).toEqual([
+        'Find deals on Bing',
+        'Serengeti adventure',
+      ]);
+      expect(mockBrowser.humanizer.clickLocatorHuman).not.toHaveBeenCalled();
     });
-  });
 
-  describe('points filter', () => {
-    it('should skip More Activities cards without points-you-will-earn icon', async () => {
-      // Build a card locator that is visible, not completed, but has NO points icon
-      const noPointsCard: any = {
+    it('should open the Daily Set sidebar and include its point-bearing task links', async () => {
+      const opener = {
         count: vi.fn().mockResolvedValue(1),
-        nth: vi.fn().mockReturnThis(),
         isVisible: vi.fn().mockResolvedValue(true),
-        locator: vi.fn().mockImplementation((selector: string) => {
-          // Completion check → not completed
-          if (selector.includes('SkypeCircleCheck') || selector.includes('complete')) {
-            return { count: vi.fn().mockResolvedValue(0) };
-          }
-          // Points check → NO points icon
-          if (selector.includes('Points you will earn')) {
-            return { count: vi.fn().mockResolvedValue(0) };
-          }
-          return {
-            count: vi.fn().mockResolvedValue(0),
-            first: vi.fn().mockReturnValue({
-              textContent: vi.fn().mockResolvedValue('No-Points Card'),
-            }),
-          };
+      };
+      const closeButton = {
+        count: vi.fn().mockResolvedValue(1),
+      };
+      const shortcut = {
+        isVisible: vi.fn().mockResolvedValue(true),
+        textContent: vi.fn().mockResolvedValue('Activity: 0/3'),
+        getAttribute: vi.fn().mockResolvedValue(null),
+        getByText: vi.fn().mockReturnValue({ count: vi.fn().mockResolvedValue(0) }),
+        locator: vi.fn().mockReturnValue({
+          filter: vi.fn().mockReturnValue({ count: vi.fn().mockResolvedValue(0) }),
         }),
+      };
+      const paragraphs = ['Upcoming events near me', 'Exciting events coming soon', '+10'];
+      const dailyTask = {
+        isVisible: vi.fn().mockResolvedValue(true),
+        textContent: vi.fn().mockResolvedValue(paragraphs.join('')),
+        getAttribute: vi.fn().mockResolvedValue(null),
+        getByText: vi.fn().mockReturnValue({ count: vi.fn().mockResolvedValue(0) }),
+        locator: vi.fn().mockReturnValue({
+          filter: vi.fn().mockImplementation(({ hasText }: { hasText: RegExp }) => ({
+            count: vi.fn().mockResolvedValue(
+              paragraphs.some((text) => hasText.test(text)) ? 1 : 0,
+            ),
+          })),
+          first: vi.fn().mockReturnValue({
+            textContent: vi.fn().mockResolvedValue(paragraphs[0]),
+          }),
+          nth: vi.fn().mockImplementation((index: number) => ({
+            textContent: vi.fn().mockResolvedValue(paragraphs[index]),
+          })),
+        }),
+      };
+      const dailyLinks = {
+        count: vi.fn().mockResolvedValue(2),
+        nth: vi.fn().mockImplementation((index: number) => [shortcut, dailyTask][index]),
+      };
+      const dialog = {
+        count: vi.fn().mockResolvedValue(1),
+        isVisible: vi.fn().mockResolvedValue(true),
+        waitFor: vi.fn().mockResolvedValue(undefined),
+        locator: vi.fn().mockReturnValue(dailyLinks),
+        getByRole: vi.fn().mockReturnValue(closeButton),
+      };
+      const emptyLinks = {
+        count: vi.fn().mockResolvedValue(0),
+        nth: vi.fn(),
       };
 
       mockPage.locator = vi.fn().mockImplementation((selector: string) => {
-        if (selector.includes('h1,h2,h3,h4')) {
-          return {
-            filter: vi.fn().mockReturnThis(),
-            first: vi.fn().mockReturnThis(),
-            locator: vi.fn().mockImplementation(() => ({
-              locator: vi.fn().mockReturnValue(noPointsCard),
-            })),
-          };
+        if (selector === '#exploreonbing a' || selector === '#moreactivities a') {
+          return emptyLinks;
         }
-        // Explore section returns 0 cards
-        if (selector.includes('explore')) {
-          return { count: vi.fn().mockResolvedValue(0) };
-        }
-        return mockLocator;
-      });
-
-      const handler = new ClickHandler(mockBrowser);
-      const result = await handler.run(mockPage);
-
-      // Card without points icon should be filtered out → skipped
-      expect(result.status).toBe('skipped');
-    });
-  });
-
-  describe('locked card detection', () => {
-    it('should skip cards with img[alt="Offer is locked"]', async () => {
-      const lockedCard: any = {
-        count: vi.fn().mockResolvedValue(1),
-        nth: vi.fn().mockReturnThis(),
-        isVisible: vi.fn().mockResolvedValue(true),
-        locator: vi.fn().mockImplementation((selector: string) => {
-          // Not completed
-          if (selector.includes('SkypeCircleCheck') || selector.includes('complete')) {
-            return { count: vi.fn().mockResolvedValue(0) };
-          }
-          // Locked: img with alt "Offer is locked" is present
-          if (selector.includes('Offer is locked') || selector.includes('points-locked') || selector.includes('mee-icon-Lock')) {
-            return { count: vi.fn().mockResolvedValue(1) };
-          }
+        if (selector === '#streaks button') {
           return {
-            count: vi.fn().mockResolvedValue(0),
-            first: vi.fn().mockReturnValue({
-              textContent: vi.fn().mockResolvedValue('Locked Activity'),
+            filter: vi.fn().mockReturnValue({
+              first: vi.fn().mockReturnValue(opener),
             }),
           };
-        }),
-      };
-
-      mockPage.locator = vi.fn().mockImplementation((selector: string) => {
-        if (selector.includes('h1,h2,h3,h4')) {
-          return {
-            filter: vi.fn().mockReturnThis(),
-            first: vi.fn().mockReturnThis(),
-            locator: vi.fn().mockImplementation(() => ({
-              locator: vi.fn().mockReturnValue(lockedCard),
-            })),
-          };
         }
-        return mockLocator;
-      });
-
-      const handler = new ClickHandler(mockBrowser);
-      const result = await handler.run(mockPage);
-
-      // Locked card should be skipped → no activities processed
-      expect(result.status).toBe('skipped');
-    });
-
-    it('should NOT skip cards with img[alt="Offer is unlocked"]', async () => {
-      const unlockedCard: any = {
-        count: vi.fn().mockResolvedValue(1),
-        nth: vi.fn().mockReturnThis(),
-        isVisible: vi.fn().mockResolvedValue(true),
-        click: vi.fn().mockResolvedValue(undefined),
-        scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
-        boundingBox: vi.fn().mockResolvedValue({ x: 100, y: 100, width: 50, height: 30 }),
-        locator: vi.fn().mockImplementation((selector: string) => {
-          // Not completed
-          if (selector.includes('SkypeCircleCheck') || selector.includes('complete')) {
-            return { count: vi.fn().mockResolvedValue(0) };
-          }
-          // Only "Offer is locked" should count as locked — unlocked img should NOT trigger
-          if (selector.includes('points-locked') || selector.includes('mee-icon-Lock') || selector.includes('Offer is locked')) {
-            return { count: vi.fn().mockResolvedValue(0) };
-          }
-          // Link anchor
-          if (selector === 'a') {
-            return {
-              count: vi.fn().mockResolvedValue(1),
-              first: vi.fn().mockReturnValue({
-                count: vi.fn().mockResolvedValue(1),
-                click: vi.fn().mockResolvedValue(undefined),
-                scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
-                boundingBox: vi.fn().mockResolvedValue({ x: 100, y: 100, width: 50, height: 30 }),
-              }),
-            };
-          }
-          return {
-            count: vi.fn().mockResolvedValue(0),
-            first: vi.fn().mockReturnValue({
-              textContent: vi.fn().mockResolvedValue('Unlocked Activity'),
-            }),
-          };
-        }),
-      };
-
-      mockPage.locator = vi.fn().mockImplementation((selector: string) => {
-        // Explore section via XPath (contains 'mee-card')
-        if (selector.includes('mee-card')) {
-          return {
-            count: vi.fn().mockResolvedValue(1),
-            nth: vi.fn().mockReturnValue(unlockedCard),
-          };
-        }
-        if (selector.includes('h1,h2,h3,h4')) {
-          return {
-            filter: vi.fn().mockReturnThis(),
-            first: vi.fn().mockReturnThis(),
-            locator: vi.fn().mockImplementation(() => ({
-              locator: vi.fn().mockReturnValue({ count: vi.fn().mockResolvedValue(0) }),
-            })),
-          };
+        if (selector === '[role="dialog"]') {
+          return { filter: vi.fn().mockReturnValue(dialog) };
         }
         return mockLocator;
       });
@@ -348,8 +287,9 @@ describe('ClickHandler', () => {
       const handler = new ClickHandler(mockBrowser, { dryRun: true });
       const result = await handler.run(mockPage);
 
-      // Unlocked card should NOT be skipped
-      expect(result.status).toBe('ok');
+      expect(result.meta?.clickedActivities).toEqual(['Upcoming events near me']);
+      expect(mockBrowser.humanizer.clickLocatorHuman).toHaveBeenCalledWith(mockPage, opener);
+      expect(mockBrowser.humanizer.clickLocatorHuman).toHaveBeenCalledWith(mockPage, closeButton);
     });
   });
 
